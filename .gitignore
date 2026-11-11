@@ -1,0 +1,30 @@
+# ---- Python 生成物 ----
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# ---- 虚拟环境 ----
+.venv/
+
+# ---- 密钥与本地数据（关键，绝不进 Git）----
+.env
+storage/
+*.db
+*.db-wal
+*.db-shm
+
+# ---- 测试与工具缓存 ----
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# ---- 编辑器 / 系统 ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

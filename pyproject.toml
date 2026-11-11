@@ -1,0 +1,42 @@
+[project]
+name = "steward"
+version = "0.1.0"
+description = "Steward"
+readme = "README.md"
+authors = [
+    { name = "chengfan", email = "161941542@qq.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "colorama>=0.4.6 ; sys_platform == 'win32'",
+    "fastapi>=0.162.4",
+    "pydantic>=2.14.3",
+    "pydantic-settings>=2.16.2",
+    "sqlalchemy[asyncio]>=2.1.8",
+    "structlog>=26.1.0",
+    "uvicorn[standard]>=0.54.0",
+]
+
+
+[build-system]
+requires = ["uv_build>=0.13.0,<0.14.0"]
+build-backend = "uv_build"
+
+[[tool.uv.index]]
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true
+
+[dependency-groups]
+dev = [
+    "ruff>=0.17.4",
+]
+
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["I001"]
