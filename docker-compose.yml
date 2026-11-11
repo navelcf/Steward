@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: steward-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-steward}
+      POSTGRES_DB: ${DB_NAME:-steward}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql          # ← 到这一层，不是 /data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-steward} -d ${DB_NAME:-steward}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
