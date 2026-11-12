@@ -9,20 +9,28 @@ from fastapi import FastAPI
 from steward.core.config import settings
 from steward.core.logging import configure_logging, get_logger
 
+from steward.infra.database import close_database, init_database  # 将数据库连接系统接入了
+
+
 # 初始化日志系统
 configure_logging(settings.logging.level)
 logger = get_logger(__name__)
 
 
+# 初始化生命周期钩子
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # 异步生成器对象，none为「吐出来的东西的类型」
     # 应用生命周期：外部资源只在这里创建和释放。
 
     # 方案 12.2 第 3 条：禁止模块级创建连接/客户端。
     # Day 2 会在这里加 check_database() / close_database()。
 
     logger.info("应用启动", app=settings.app.name, port=settings.app.port)
-    yield
+    await init_database(app)
+    try:
+        yield
+    finally:
+        await close_database(app)
     logger.info("应用关闭", app=settings.app.name)
 
 

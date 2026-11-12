@@ -61,10 +61,10 @@ class DatabaseSettings(EnvSettings):
     name: str = Field(alias="DB_NAME", default="steward")
     user: str = Field(alias="DB_USER", default="steward")
     password: str = Field(alias="DB_PASSWORD", default="")
-    echo: bool = Field(alias="DB_ECHO", default=False)
-    pool_size: int = Field(alias="DB_POOL_SIZE", default=5)
-    max_overflow: int = Field(alias="DB_MAX_OVERFLOW", default=10)
-    pool_recycle: int = Field(alias="DB_POOL_RECYCLE", default=1800)
+    echo: bool = Field(alias="DB_ECHO", default=False)  # sql语句
+    pool_size: int = Field(alias="DB_POOL_SIZE", default=5)  # 连接池大小
+    max_overflow: int = Field(alias="DB_MAX_OVERFLOW", default=10)  # 连接池溢出最大值
+    pool_recycle: int = Field(alias="DB_POOL_RECYCLE", default=1800)  # 连接池回收时间
 
     @computed_field
     @property
