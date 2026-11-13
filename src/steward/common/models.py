@@ -8,7 +8,7 @@ from datetime import datetime
 
 from sqlalchemy import DateTime, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-# **`DeclarativeBase` 是什么：** SQLAlchemy 提供的一个基类，继承它就获得「我能被映射成表」的能力。
+# **`DeclarativeBase` 是什么： SQLAlchemy 提供的一个基类，继承它就获得「我能被映射成表」的能力。
 
 
 # ORM = 把「数据库表」映射成「Python 类」。
@@ -24,6 +24,8 @@ class Base(DeclarativeBase):
 
 
 # 只想要创建时间的表继承这个；mapped_column 在 Mixin 里会被 SQLAlchemy 复制到子类。
+# `timezone=True` 的意思是「带时区」
+# `mapped_column(...)`  定义「这一列的具体参数」。
 class CreatedAtMixin:
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())  # datatime列
 

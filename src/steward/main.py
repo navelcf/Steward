@@ -11,6 +11,9 @@ from steward.core.logging import configure_logging, get_logger
 
 from steward.infra.database import close_database, init_database  # 将数据库连接系统接入了
 
+from steward.common.models import Base
+from steward.modules.auth.models import User
+from steward.modules.auth.router import router as auth_router
 
 # 初始化日志系统
 configure_logging(settings.logging.level)
@@ -27,6 +30,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # 异步生成器对�
 
     logger.info("应用启动", app=settings.app.name, port=settings.app.port)
     await init_database(app)
+    # 读一下 User.__tablename__：既确认模型已被 import 注册到 Base.metadata，也留一条可查的日志。
+    # 少了这一步，create_all 可能安静地建成 0 张表（静默错误）。
+    logger.info("待建表", tables=[User.__tablename__])
+    async with app.state.db_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+        # `Base.metadata` 是一份记录所有表定义的登记表。它是一个 `MetaData` 对象。
+        # `create_all` 是同步方法，它要的是一条同步的 `Connection`
+        # `conn.run_sync`：在线程中运行同步代码。也就是说，这里会等它
+    logger.info("数据表已就绪", tables=sorted(Base.metadata.tables))
+
     try:
         yield
     finally:
@@ -41,6 +54,10 @@ app = FastAPI(
     debug=settings.app.debug,
     lifespan=lifespan,
 )
+
+# router 自带 prefix，这里不要再传 prefix
+app.include_router(auth_router)
+# 挂上身份认证路由
 
 
 # 测试接口
