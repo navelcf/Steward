@@ -22,6 +22,7 @@ class User(Base, CreatedAtMixin, UpdatedAtMixin):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     # `autoincrement=True`
     # 这个参数是「让数据库自己往上涨」，不用你在 Python 里赋值。
+    # 具体测试下来这个id很诡异，我第一条存进去，居然是4！
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     # `String(255)`：变长字符串，加一个长度上限
     # `unique=True` 这一列的值不能重复。
