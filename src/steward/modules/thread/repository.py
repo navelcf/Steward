@@ -29,6 +29,7 @@ class ThreadRepository:
         # 这里是scalars，非 scalar，因为可能多条结果
 
     # 按 id + 归属一起查；查不到就是「不存在或不是你的」，上层统一转 404。
+    # 本质上防止接口滥用！
     async def get_owned(self, thread_id: str, user_id: int) -> ChatThread | None:
         return await self.session.scalar(
             select(ChatThread).where(

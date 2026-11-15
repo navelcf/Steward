@@ -23,6 +23,9 @@ from steward.modules.file.router import router as file_router
 from steward.infra.llm import init_llm
 from steward.modules.chat.router import router as chat_router
 
+from steward.modules.chat.history_router import router as history_router
+from steward.modules.chat.models import Message
+
 # 初始化日志系统
 configure_logging(settings.logging.level)
 logger = get_logger(__name__)
@@ -41,7 +44,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # 异步生成器对�
     # 读一下 User.__tablename__：既确认模型已被 import 注册到 Base.metadata，也留一条可查的日志。
     # 少了这一步，create_all 可能安静地建成 0 张表（静默错误）。
     # 读一次两个模型的 __tablename__：确保都已注册进 Base.metadata，并留可查的哨兵日志。
-    logger.info("待建表", tables=[User.__tablename__, ChatThread.__tablename__])
+    logger.info("待建表", tables=[User.__tablename__, ChatThread.__tablename__, Message.__tablename__])
     async with app.state.db_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         # `Base.metadata` 是一份记录所有表定义的登记表。它是一个 `MetaData` 对象。
@@ -78,6 +81,9 @@ app.include_router(file_router)
 
 app.include_router(chat_router)
 # 挂上聊天路由
+
+app.include_router(history_router)
+# 挂上历史路由
 
 
 # 测试接口
