@@ -18,6 +18,8 @@ from steward.modules.auth.router import router as auth_router
 from steward.modules.thread.models import ChatThread
 from steward.modules.thread.router import router as thread_router
 
+from steward.modules.file.router import router as file_router
+
 # 初始化日志系统
 configure_logging(settings.logging.level)
 logger = get_logger(__name__)
@@ -65,6 +67,9 @@ app.include_router(auth_router)
 
 app.include_router(thread_router)
 # 挂上会话管理路由
+
+app.include_router(file_router)
+# 挂上文件管理路由
 
 
 # 测试接口
