@@ -20,6 +20,9 @@ from steward.modules.thread.router import router as thread_router
 
 from steward.modules.file.router import router as file_router
 
+from steward.infra.llm import init_llm
+from steward.modules.chat.router import router as chat_router
+
 # 初始化日志系统
 configure_logging(settings.logging.level)
 logger = get_logger(__name__)
@@ -46,6 +49,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # 异步生成器对�
         # `conn.run_sync`：在线程中运行同步代码。也就是说，这里会等它
     logger.info("数据表已就绪", tables=sorted(Base.metadata.tables))
 
+    init_llm(app)
+
     try:
         yield
     finally:
@@ -70,6 +75,9 @@ app.include_router(thread_router)
 
 app.include_router(file_router)
 # 挂上文件管理路由
+
+app.include_router(chat_router)
+# 挂上聊天路由
 
 
 # 测试接口

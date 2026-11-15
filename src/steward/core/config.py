@@ -95,11 +95,46 @@ class LoggingSettings(EnvSettings):
     level: str = Field(alias="LOGGING_LEVEL", default="INFO")
 
 
+class LlmSettings(EnvSettings):
+    # 模型相关配置；api_key 不给默认值，忘配就启动失败（快速失败）。
+    api_key: str = Field(
+        alias="DEEPSEEK_API_KEY",
+        min_length=1,
+    )
+    # OpenAI 兼容根地址，不带 /v1；
+    base_url: str = Field(
+        alias="DEEPSEEK_BASE_URL",
+        default="https://api.deepseek.com",
+    )
+    # 换模型只改 .env 这一行的值，代码不动。
+    chat_model: str = Field(
+        alias="CHAT_MODEL",
+        default="deepseek-flash",
+    )
+    # 思考模式开关：enabled / disabled；默认关闭，官方默认是开启。
+    thinking: str = Field(
+        alias="CHAT_THINKING",
+        default="disabled",
+        pattern="^(enabled|disabled)$",
+    )
+    # temperature 在思考模式不生效；默认已关闭思考，这个值才真正起作用。
+    temperature: float = Field(
+        alias="CHAT_TEMPERATURE",
+        default=0.3,
+    )
+    # 8 万是 ADR-03 定的产品阈值，不是模型能力上限，不随 1M 上下文放大。
+    max_doc_tokens: int = Field(
+        alias="MAX_DOC_TOKENS",
+        default=80000,
+    )
+
+
 class Settings(BaseSettings):
     app: AppSettings = Field(default_factory=AppSettings)
     db: DatabaseSettings = Field(default_factory=DatabaseSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
+    llm: LlmSettings = Field(default_factory=LlmSettings)
 
 
 settings = Settings()
