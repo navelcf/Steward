@@ -85,6 +85,24 @@ class DatabaseSettings(EnvSettings):
         # render_as_string: 把 URL 对象转为字符串，hide_password: 不隐藏密码
 
 
+    # 项目中的 SQLAlchemy 使用 asyncpg 驱动，而 PostgreSQL Checkpointer 使用 psycopg 驱动。
+    # 二者访问的是同一个数据库，但连接地址的协议不同。
+    # Checkpointer 的串不能写 +psycopg，psycopg_pool 要的是标准 libpq URI。
+    # 继续用 URL.create 而不是手拼 —— 密码里有 @ / : / / 会被自动转义，和 Day 2 一个道理。
+    @computed_field
+    @property
+    def checkpoint_url(self) -> str:
+        # psycopg 用标准 libpq URI，drivername 是 postgresql，不能带 +asyncpg。
+        return URL.create(
+            drivername="postgresql",
+            username=self.user,
+            password=self.password,
+            host=self.host,
+            port=self.port,
+            database=self.name,
+        ).render_as_string(hide_password=False)
+
+
 class AuthSettings(EnvSettings):
     # 故意不设默认值：忘了配就直接启动失败，比悄悄用弱密钥安全
     secret: str = Field(alias="JWT_SECRET", min_length=32)
@@ -127,6 +145,7 @@ class LlmSettings(EnvSettings):
         alias="MAX_DOC_TOKENS",
         default=80000,
     )
+
 
 
 class Settings(BaseSettings):

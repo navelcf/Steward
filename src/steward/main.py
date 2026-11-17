@@ -26,6 +26,11 @@ from steward.modules.chat.router import router as chat_router
 from steward.modules.chat.history_router import router as history_router
 from steward.modules.chat.models import Message
 
+from steward.infra.checkpointer import close_checkpointer, init_checkpointer
+from steward.modules.tool.models import ToolRegistry
+from steward.modules.tool.router import router as tool_router
+from steward.modules.tool.service import ensure_registered
+
 # 初始化日志系统
 configure_logging(settings.logging.level)
 logger = get_logger(__name__)
@@ -44,7 +49,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # 异步生成器对�
     # 读一下 User.__tablename__：既确认模型已被 import 注册到 Base.metadata，也留一条可查的日志。
     # 少了这一步，create_all 可能安静地建成 0 张表（静默错误）。
     # 读一次两个模型的 __tablename__：确保都已注册进 Base.metadata，并留可查的哨兵日志。
-    logger.info("待建表", tables=[User.__tablename__, ChatThread.__tablename__, Message.__tablename__])
+    logger.info("待建表", tables=[User.__tablename__, ChatThread.__tablename__, Message.__tablename__,ToolRegistry.__tablename__])
     async with app.state.db_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         # `Base.metadata` 是一份记录所有表定义的登记表。它是一个 `MetaData` 对象。
@@ -52,11 +57,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # 异步生成器对�
         # `conn.run_sync`：在线程中运行同步代码。也就是说，这里会等它
     logger.info("数据表已就绪", tables=sorted(Base.metadata.tables))
 
+    await init_checkpointer(app)# 创建 Checkpointer连接
+    await ensure_registered(app.state.db_session_factory)
+    # 就是这里，必须先自己开一个session
+
     init_llm(app)
 
     try:
         yield
     finally:
+        await close_checkpointer(app)# 先关 Checkpointer 的 psycopg 池，再关 SQLAlchemy 的 asyncpg 池
         await close_database(app)
     logger.info("应用关闭", app=settings.app.name)
 
@@ -84,6 +94,9 @@ app.include_router(chat_router)
 
 app.include_router(history_router)
 # 挂上历史路由
+
+app.include_router(tool_router)
+# 挂上工具路由
 
 
 # 测试接口
