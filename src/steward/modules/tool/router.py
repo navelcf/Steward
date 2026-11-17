@@ -18,7 +18,7 @@ async def list_tools(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> list[ToolOut]:
-    del current_user# 删除这个变量，不能没有，不然无法鉴权
+    del current_user  # 删除这个变量，不能没有，不然无法鉴权
     rows = await ToolRepository(session).list_all()
     return [ToolOut.model_validate(row) for row in rows]
     # model_validate:按 `ToolOut` 声明过的字段名去 `getattr` 取
@@ -33,7 +33,7 @@ async def update_policy(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> ToolOut:
-    del current_user# 同理
+    del current_user  # 同理
     repo = ToolRepository(session)
     row = await repo.get_by_name(name)
     if row is None:

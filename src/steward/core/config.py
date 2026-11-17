@@ -84,7 +84,6 @@ class DatabaseSettings(EnvSettings):
         ).render_as_string(hide_password=False)
         # render_as_string: 把 URL 对象转为字符串，hide_password: 不隐藏密码
 
-
     # 项目中的 SQLAlchemy 使用 asyncpg 驱动，而 PostgreSQL Checkpointer 使用 psycopg 驱动。
     # 二者访问的是同一个数据库，但连接地址的协议不同。
     # Checkpointer 的串不能写 +psycopg，psycopg_pool 要的是标准 libpq URI。
@@ -145,7 +144,6 @@ class LlmSettings(EnvSettings):
         alias="MAX_DOC_TOKENS",
         default=80000,
     )
-
 
 
 class Settings(BaseSettings):

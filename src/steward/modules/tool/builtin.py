@@ -20,18 +20,12 @@ NOTES_ROOT = (STORAGE_ROOT / "notes").resolve()
 
 # 描述只写一处：@tool 和注册表都引用同一个常量，避免改了一处忘了另一处。
 # 拆成两段拼接而不是一整行，也是为了不超 ruff 的 120 字符行宽。
-GET_TIME_DESC = (
-    "返回当前服务器本地时间（ISO 8601 带时区）。"
-    "当用户问“现在几点”“今天几号”时调用，不要自己编时间。"
-)
-SAVE_NOTE_DESC = (
-    "把一段文字保存成笔记文件，返回保存后的相对路径。"
-    "仅在用户明确说“记下来”“保存笔记”时调用。"
-)
+GET_TIME_DESC = "返回当前服务器本地时间（ISO 8601 带时区）。当用户问“现在几点”“今天几号”时调用，不要自己编时间。"
+SAVE_NOTE_DESC = "把一段文字保存成笔记文件，返回保存后的相对路径。仅在用户明确说“记下来”“保存笔记”时调用。"
 
 
 # 只读工具：默认 auto，今天就能被模型调用。
-@tool(description=GET_TIME_DESC)# args_schema在被tool修饰的时候就已经创建好了
+@tool(description=GET_TIME_DESC)  # args_schema在被tool修饰的时候就已经创建好了
 def get_current_time() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
     # astimezone()               → 补上本地时区，变成 aware
@@ -52,7 +46,7 @@ def build_save_note(user_id: int) -> BaseTool:
         if not target.is_relative_to(NOTES_ROOT):
             raise ValueError("笔记路径非法")
         target.write_text(content, encoding="utf-8")
-        return target.relative_to(NOTES_ROOT).as_posix()# 把所有反斜杠换成正斜杠。
+        return target.relative_to(NOTES_ROOT).as_posix()  # 把所有反斜杠换成正斜杠。
         # relative_to()  → 相对路径,不暴露目录结构
 
     return save_note

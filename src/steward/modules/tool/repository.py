@@ -15,7 +15,7 @@ class ToolRepository:
 
     # 按 name 稳定排序，方便 curl 对照。
     async def list_all(self) -> Sequence[ToolRegistry]:
-        stmt = select(ToolRegistry).order_by(ToolRegistry.name.asc())# asc() 升序
+        stmt = select(ToolRegistry).order_by(ToolRegistry.name.asc())  # asc() 升序
         return (await self.session.scalars(stmt)).all()
 
     async def get_by_name(self, name: str) -> ToolRegistry | None:

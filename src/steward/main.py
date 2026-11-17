@@ -49,7 +49,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # 异步生成器对�
     # 读一下 User.__tablename__：既确认模型已被 import 注册到 Base.metadata，也留一条可查的日志。
     # 少了这一步，create_all 可能安静地建成 0 张表（静默错误）。
     # 读一次两个模型的 __tablename__：确保都已注册进 Base.metadata，并留可查的哨兵日志。
-    logger.info("待建表", tables=[User.__tablename__, ChatThread.__tablename__, Message.__tablename__,ToolRegistry.__tablename__])
+    logger.info(
+        "待建表",
+        tables=[User.__tablename__, ChatThread.__tablename__, Message.__tablename__, ToolRegistry.__tablename__],
+    )
     async with app.state.db_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         # `Base.metadata` 是一份记录所有表定义的登记表。它是一个 `MetaData` 对象。
@@ -57,18 +60,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # 异步生成器对�
         # `conn.run_sync`：在线程中运行同步代码。也就是说，这里会等它
     logger.info("数据表已就绪", tables=sorted(Base.metadata.tables))
 
-    await init_checkpointer(app)# 创建 Checkpointer连接
+    await init_checkpointer(app)  # 创建 Checkpointer连接
     await ensure_registered(app.state.db_session_factory)
     # 就是这里，必须先自己开一个session
+    # `Depends` 是 FastAPI 替你开；`async with factory()` 是你自己开
+    # 这里必须自己借用工厂开一条，没有http请求
 
     init_llm(app)
 
     try:
         yield
     finally:
-        await close_checkpointer(app)# 先关 Checkpointer 的 psycopg 池，再关 SQLAlchemy 的 asyncpg 池
+        await close_checkpointer(app)  # 先关 Checkpointer 的 psycopg 池，再关 SQLAlchemy 的 asyncpg 池
         await close_database(app)
-    logger.info("应用关闭", app=settings.app.name)
+        logger.info("应用关闭", app=settings.app.name)
 
 
 # 初始化fastapi

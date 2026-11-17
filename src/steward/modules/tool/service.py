@@ -22,16 +22,15 @@ def tool_param_schema(name: str) -> dict:
     raise KeyError(f"未登记的内置工具: {name}")
 
 
-
 # 启动时登记内置工具；只补缺失的行，绝不覆盖用户改过的 policy。
 async def ensure_registered(factory: async_sessionmaker[AsyncSession]) -> None:
     # 它在 `lifespan` 里跑 —— 那时候还没有任何请求，自然也没有请求级的 session。
     # 所以它必须自己开一个
     async with factory() as session:
         repo = ToolRepository(session)
-        existing = {row.name for row in await repo.list_all()}# 表里的所有名字
+        existing = {row.name for row in await repo.list_all()}  # 表里的所有名字
         added: list[str] = []
-        for name, meta in BUILTIN_META.items():# 键和值成对，我怎么连这个也忘记掉了
+        for name, meta in BUILTIN_META.items():  # 键和值成对，我怎么连这个也忘记掉了
             if name in existing:
                 continue
             await repo.add(
