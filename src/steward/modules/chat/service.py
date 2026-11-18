@@ -21,7 +21,12 @@ from steward.modules.thread.repository import ThreadRepository
 from fastapi.sse import ServerSentEvent
 
 from steward.infra.agent import build_agent
-from steward.modules.tool.service import available_tools
+
+
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+from steward.modules.approval.service import ApprovalService
+from steward.modules.tool.service import load_toolset
 
 logger = get_logger(__name__)
 
@@ -86,6 +91,7 @@ def build_message(message: str, file_id: str | None, user_id: int) -> str:
 
 # 异步生成器：分三段管 DB 连接，中间那段纯流式，不占连接。
 # 这里非常重要，session开始用的时候再用，别一直在流式的时候还占着
+# 所以这里必须自己开session，不能让depends来开
 async def event_stream(
     request: Request,
     thread_id: str,
@@ -121,9 +127,14 @@ async def event_stream(
     buffer: list[str] = []
     try:
         async with factory() as session:
-            tools = await available_tools(session, user_id)
+            tools, interrupt_on = await load_toolset(session, user_id)
             # 读完可用工具，立刻释放连接
-        agent = build_agent(request.app.state.chat_model, tools, request.app.state.checkpointer)
+        agent = build_agent(
+            request.app.state.chat_model,
+            tools,
+            request.app.state.checkpointer,
+            interrupt_on,
+        )
         config = {"configurable": {"thread_id": thread_id}}
         async for event in agent.astream_events(
             {"messages": [{"role": "user", "content": prompt}]},
@@ -141,6 +152,58 @@ async def event_stream(
         logger.exception("Agent 流式生成失败", user_id=user_id)
         yield _sse("error", {"message": "生成失败，请稍后重试"})
         yield _sse("done", {"ok": False})
+        return
+
+    # 段 2.5：Agent 正常结束但可能停在中断点；每个中断建一张卡并推给前端。
+    # 实测：中断不会抛异常，astream_events 正常结束，所以要主动 aget_state 检查。
+    try:
+        snapshot = await agent.aget_state(config)
+        # 从 checkpointer 里读「这个 thread_id 当前的状态快照」
+        pending = [item for task in snapshot.tasks for item in task.interrupts]
+        # 两层列表推导式：先从每个 task 中取中断列表，再把所有中断列表合并成一个列表
+        # 外层：遍历每个待执行任务，内层：遍历这个任务里的每个中断
+        # per_call 每个调用一个 task
+        # pending = [中断 A, 中断 B]
+
+    except Exception:
+        # checkpoint 读失败不影响已经流出的回答；按「无中断」继续落库。
+        logger.exception("读取中断状态失败，按无中断处理", thread_id=thread_id)
+        pending = []
+        # 少建一张卡（用户可以重发消息），也不能让整条流崩。
+
+    if pending:
+        # 逐张独立建卡、独立 commit、独立捕获：
+        # 一张失败不能拖累其他张；也不能让库里留下一张前端从没收到过的卡
+        # （那样用户刷新 GET /approvals 会突然多出一张，无法对账）。
+        cards = []
+        for item in pending:
+            try:
+                async with factory() as session:
+                    cards.append(await ApprovalService(session).create_from_interrupt(thread_id, user_id, item))
+            except Exception:
+                logger.exception("建卡失败，跳过该张", thread_id=thread_id, interrupt_id=item.id)
+
+        if not cards:
+            yield _sse("error", {"message": "审批卡创建失败，请重试"})
+            yield _sse("done", {"ok": False})
+            return
+        for card in cards:
+            yield _sse(
+                "interrupt",
+                {
+                    "approval_id": card.id,
+                    "tool_name": card.tool_name,
+                    "args": card.args_json,
+                    "risk_note": card.risk_note,
+                    "expires_at": card.expires_at.isoformat() if card.expires_at else None,
+                    # `card.expires_at` 是 `datetime` 对象，不能直接塞进 JSON
+                    # （`json.dumps` 会报 `Object of type datetime is not JSON serializable`）。
+                    # `.isoformat()` 转成字符串 `"2026-11-19T18:00:12+00:00"`
+                },
+            )
+        # 中断轮次不落 assistant 消息：回答还没完成，落半截会污染历史。
+        # cards 是成功数量：部分失败时前端能据此和 GET /approvals 对账。
+        yield _sse("done", {"ok": True, "interrupted": True, "cards": len(cards)})
         return
 
     # 段 3：只有成功走完整个流，才把完整回答落库（API 契约，不是给模型看的）。
@@ -190,8 +253,17 @@ class HistoryService:
             total=total,
         )
 
-    async def clear_messages(self, thread_id: str, user_id: int) -> int:
+    async def clear_messages(
+        self,
+        thread_id: str,
+        user_id: int,
+        checkpointer: AsyncPostgresSaver,
+    ) -> int:
         await self._assert_owned(thread_id, user_id)
         deleted = await MessageRepository(self.session).delete_by_thread(thread_id, user_id)
         await self.session.commit()
+        try:
+            await checkpointer.adelete_thread(thread_id)
+        except Exception:
+            logger.exception("checkpoint 清理失败，留下孤儿", thread_id=thread_id, user_id=user_id)
         return deleted

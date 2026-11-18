@@ -8,6 +8,8 @@ from psycopg_pool import AsyncConnectionPool
 from steward.core.config import settings
 from steward.core.logging import get_logger
 
+from fastapi import Request
+
 logger = get_logger(__name__)
 
 
@@ -59,3 +61,11 @@ async def close_checkpointer(app: FastAPI) -> None:
         return
     await pool.close()
     logger.info("Checkpointer 连接池已关闭")
+
+
+# FastAPI 依赖：取 lifespan 里建好的 checkpointer；没初始化就说明启动流程有问题。
+def get_checkpointer(request: Request) -> AsyncPostgresSaver:
+    checkpointer: AsyncPostgresSaver | None = getattr(request.app.state, "checkpointer", None)
+    if checkpointer is None:
+        raise RuntimeError("Checkpointer 未初始化")
+    return checkpointer

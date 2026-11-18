@@ -14,6 +14,10 @@ from steward.modules.thread.models import ChatThread
 from steward.modules.thread.schemas import ThreadCreateIn, ThreadOut, ThreadUpdateIn
 from steward.modules.thread.service import ThreadNotFoundError, ThreadService
 
+
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from steward.infra.checkpointer import get_checkpointer
+
 # 和 auth 一样，prefix 写全；main.py 里 include_router 不要再叠 prefix。
 router = APIRouter(prefix="/api/v1/threads", tags=["thread"])
 
@@ -61,8 +65,9 @@ async def delete_thread(
     thread_id: str,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    checkpointer: AsyncPostgresSaver = Depends(get_checkpointer),
 ) -> None:
     try:
-        await ThreadService(session).delete_thread(thread_id, current_user.id)
+        await ThreadService(session).delete_thread(thread_id, current_user.id, checkpointer)
     except ThreadNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "会话不存在") from exc

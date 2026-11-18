@@ -92,6 +92,66 @@ messages	业务消息：content + sources + run\_id	event\_stream 段 1 / 段 3	
 
 
 
+\# 能不能直接给 `checkpoints` 加外键
+
+
+
+\*\*我实测了（事务里加完立刻回滚，没留痕迹）：\*\*
+
+
+
+```
+
+BEGIN;
+
+ALTER TABLE checkpoints ADD CONSTRAINT fk\_probe
+
+&#x20;   FOREIGN KEY (thread\_id) REFERENCES chat\_threads(id) ON DELETE CASCADE;
+
+\-- 结果：ALTER TABLE  ← 成功了
+
+ROLLBACK;
+
+```
+
+
+
+\*\*技术上\*\*能加\*\*。PG 允许 `TEXT` 和 `VARCHAR(36)` 之间建外键（字符串类型兼容）。\*\*
+
+
+
+\*\*加了之后，删 `chat\_threads` 会级联删 `checkpoints`—— 看起来问题解决了。\*\*
+
+
+
+\## 但不该这么做，三个理由
+
+
+
+\*\*① 方案 4.3 L525 原文：\*\*
+
+
+
+> 
+
+> \*\*`checkpoints` 系列表由 `langgraph-checkpoint-postgres` 的 `AsyncPostgresSaver.setup()` 自动创建，不要手工改。\*\*
+
+
+
+\*\*手工加的约束，下次 `setup()` 跑（它是 `CREATE TABLE IF NOT EXISTS`）不会报错，也不会删掉你的外键 —— 但它\*\*不知道\*\*有这个东西。将来 LangGraph 升级、迁移脚本跑的时候，可能出意外。\*\*
+
+
+
+\*\*② `checkpoint\_blobs` / `checkpoint\_writes` 也得一起加，共三张表、三个约束。\*\*你每加一张，将来就多一个 “升级时可能被搞坏” 的地方。\*\*
+
+
+
+\*\*③ 最关键的：Checkpointer 有\*\*自己的删除语义\*\*。`adelete\_thread` 是幂等的、走它自己的 `psycopg` 连接池、内部按顺序删三张表。你加外键等于\*\*绕开它的删除路径\*\*，让 PG 替你干 —— 行为上可能对，但\*\*语义上错位\*\*。\*\*
+
+
+
+\*\*打个比方：`adelete\_thread` 是 “打电话给 Checkpointer 说这个会话不要了，它自己去清理”；加外键是 “你趁它不在，直接把它的柜子搬空”。结果一样，但它的内部状态（比如 `checkpoint\_migrations` 的版本记录）没被通知到。\*\*
+
 
 
 

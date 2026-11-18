@@ -31,6 +31,9 @@ from steward.modules.tool.models import ToolRegistry
 from steward.modules.tool.router import router as tool_router
 from steward.modules.tool.service import ensure_registered
 
+from steward.modules.approval.models import Approval
+from steward.modules.approval.router import router as approval_router
+
 # 初始化日志系统
 configure_logging(settings.logging.level)
 logger = get_logger(__name__)
@@ -51,7 +54,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # 异步生成器对�
     # 读一次两个模型的 __tablename__：确保都已注册进 Base.metadata，并留可查的哨兵日志。
     logger.info(
         "待建表",
-        tables=[User.__tablename__, ChatThread.__tablename__, Message.__tablename__, ToolRegistry.__tablename__],
+        tables=[
+            User.__tablename__,
+            ChatThread.__tablename__,
+            Message.__tablename__,
+            ToolRegistry.__tablename__,
+            Approval.__tablename__,
+        ],
     )
     async with app.state.db_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -102,6 +111,9 @@ app.include_router(history_router)
 
 app.include_router(tool_router)
 # 挂上工具路由
+
+app.include_router(approval_router)
+# 挂上审批卡片路由
 
 
 # 测试接口

@@ -32,7 +32,7 @@ class Message(Base, CreatedAtMixin):
         BigInteger,
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-    )
+    )  # 注意这个外键设定是表名。不是对象名
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     sources: Mapped[list[dict] | None] = mapped_column(JSONB, nullable=True)

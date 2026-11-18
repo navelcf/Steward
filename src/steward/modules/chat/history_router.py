@@ -9,6 +9,9 @@ from steward.modules.auth.models import User
 from steward.modules.chat.schemas import MessageListOut
 from steward.modules.chat.service import HistoryService, ThreadNotFoundError
 
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from steward.infra.checkpointer import get_checkpointer
+
 # 路径对齐方案 5.3 的 /threads/{id}/messages；单独一个 router 是因为 prefix 不同。
 router = APIRouter(prefix="/api/v1/threads", tags=["chat"])
 
@@ -34,8 +37,9 @@ async def clear_messages(
     thread_id: str,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    checkpointer: AsyncPostgresSaver = Depends(get_checkpointer),
 ) -> None:
     try:
-        await HistoryService(session).clear_messages(thread_id, current_user.id)
+        await HistoryService(session).clear_messages(thread_id, current_user.id, checkpointer)
     except ThreadNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "会话不存在") from exc

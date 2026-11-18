@@ -10,6 +10,8 @@ from steward.modules.tool.builtin import BUILTIN_META, SaveNoteArgs, build_save_
 from steward.modules.tool.models import ToolRegistry
 from steward.modules.tool.repository import ToolRepository
 
+from langchain.agents.middleware import InterruptOnConfig
+
 logger = get_logger(__name__)
 
 
@@ -52,20 +54,44 @@ async def ensure_registered(factory: async_sessionmaker[AsyncSession]) -> None:
     logger.info("工具注册表就绪", added=added, total=len(BUILTIN_META))
 
 
-# 计算本次请求实际可用的工具集；deny 与 ask 今天都不给模型（见下方说明）。
-async def available_tools(session: AsyncSession, user_id: int) -> list[BaseTool]:
+# 一次查出本轮的工具集与中断配置，避免同一张表查两遍。
+# 返回：(可给模型的工具, 需要中断确认的配置)。
+async def load_toolset(
+    session: AsyncSession,
+    user_id: int,
+) -> tuple[list[BaseTool], dict[str, bool | InterruptOnConfig]]:
     rows: Sequence[ToolRegistry] = await ToolRepository(session).list_all()
     tools: list[BaseTool] = []
+    interrupt_on: dict[str, bool | InterruptOnConfig] = {}
+    # bool的话，LangChain 允许简写配置：（这里用不到，但要写）
+    # interrupt_on = {
+    #     "save_note":   True,      # True = 用默认配置（approve/edit/reject 都给）
+    #     "get_time":    False,     # False = 不拦
+    #     "delete_file": {"allowed_decisions": ["approve", "reject"]},   # 精细配置
+    # }
+
     for row in rows:
         if not row.is_enabled or row.policy == "deny":
-            continue
-        if row.policy == "ask":
-            # 过渡态：今天没有 HumanInTheLoopMiddleware，ask 工具若放进去会被直接执行。
-            # Day 3 接上 interrupt_on 之后，这段改成「放进 tools，同时进 interrupt_on」。
-            logger.info("ask 工具暂未接入中断", tool=row.name)
             continue
         if row.name == "get_current_time":
             tools.append(get_current_time)
         elif row.name == "save_note":
             tools.append(build_save_note(user_id))
-    return tools
+        else:
+            logger.warning("注册表里有未知工具，跳过", tool=row.name)
+            continue
+
+        if row.policy == "ask":
+            # 只给 approve / reject；edit 留 Day 4。
+            interrupt_on[row.name] = {
+                "allowed_decisions": ["approve", "reject"],
+                "description": row.risk_note or f"工具 {row.name} 需要确认",
+            }
+            # 如果哪天觉得太烦（记个普通笔记也要确认一遍），可以配：
+            # interrupt_on["save_note"] = {
+            #     "allowed_decisions": ["approve", "reject"],
+            #     "when": lambda req: "删除" in req.tool_call["args"].get("content", ""),
+            # }
+            # 只拦「内容里带删除」的调用，其他自动放行
+
+    return tools, interrupt_on
