@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from collections.abc import AsyncGenerator
 from pathlib import Path
 from uuid import UUID
@@ -28,6 +27,10 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from steward.modules.approval.service import ApprovalService
 from steward.modules.tool.service import load_toolset
 
+from steward.common.sse import sse_event
+
+from langgraph.types import Command
+
 logger = get_logger(__name__)
 
 
@@ -44,11 +47,8 @@ class DocumentTooLargeError(Exception):  # 文件太大
 # SSE 事件格式：event: 和 data: 后各有一个空格，结尾两个换行，一个都不能少。
 # raw_data 传已序列化的字符串，避免 ServerSentEvent 自动 JSON 编码改契约。
 def _sse(event: str, data: dict[str, object]) -> ServerSentEvent:
-    return ServerSentEvent(
-        raw_data=json.dumps(data, ensure_ascii=False),
-        event=event,
-    )
-    # ensure_ascii=False：中文输出，不要转义
+    return sse_event(event, data)
+    # 这里用公共的sse
 
 
 # 按 file_id 在用户目录找回文件；校验 uuid 格式、唯一匹配、路径前缀、后缀白名单。
@@ -98,30 +98,36 @@ async def event_stream(
     message: str,
     file_id: str | None,
     user_id: int,
+    resume: Command | None = None,
+    note_id: str | None = None,
 ) -> AsyncGenerator[ServerSentEvent, None]:
     factory = request.app.state.db_session_factory
 
     # 段 1：落 user 消息 -> commit，然后立刻释放连接。
     # 归属校验已挪到 deps.get_owned_thread（依赖层），这里不再重复查。
-    try:
-        async with factory() as session:  # 注意with，用完赶紧关闭
-            await MessageRepository(session).add(
-                Message(thread_id=thread_id, user_id=user_id, role="user", content=message)
-            )
-            await session.commit()
-    except Exception:
-        logger.exception("消息落库失败", user_id=user_id, thread_id=thread_id)
-        yield _sse("error", {"message": "消息保存失败，请稍后重试"})
-        yield _sse("done", {"ok": False})
-        return
+    if resume is not None:
+        try:
+            async with factory() as session:  # 注意with，用完赶紧关闭
+                await MessageRepository(session).add(
+                    Message(thread_id=thread_id, user_id=user_id, role="user", content=message)
+                )
+                await session.commit()
+        except Exception:
+            logger.exception("消息落库失败", user_id=user_id, thread_id=thread_id)
+            yield _sse("error", {"message": "消息保存失败，请稍后重试"})
+            yield _sse("done", {"ok": False})
+            return
 
     # 组装本轮消息；文档错误在开流之前就能确定，直接发 error + done 干净收尾。
-    try:
-        prompt = build_message(message, file_id, user_id)
-    except (DocumentNotFoundError, DocumentTooLargeError) as exc:
-        yield _sse("error", {"message": str(exc)})
-        yield _sse("done", {"ok": False})
-        return
+    # resume 轮次不组装（模型用 checkpoint 里已有的上下文）。
+    prompt = ""
+    if resume is None:
+        try:
+            prompt = build_message(message, file_id, user_id)
+        except (DocumentNotFoundError, DocumentTooLargeError) as exc:
+            yield _sse("error", {"message": str(exc)})
+            yield _sse("done", {"ok": False})
+            return
 
     # 段 2：流式调 Agent，这段时间不持有任何数据库连接。
     buffer: list[str] = []
@@ -136,8 +142,9 @@ async def event_stream(
             interrupt_on,
         )
         config = {"configurable": {"thread_id": thread_id}}
+        inputs = resume if resume is not None else {"messages": [{"role": "user", "content": prompt}]}
         async for event in agent.astream_events(
-            {"messages": [{"role": "user", "content": prompt}]},
+            inputs,
             config=config,
             version="v2",
         ):

@@ -40,6 +40,11 @@ class ApprovalConflictError(Exception):
     pass
 
 
+# 卡片已过期；router 统一转 409（比 410 少一个状态码，前端好处理）。
+class ApprovalExpiredError(Exception):
+    pass
+
+
 # 业务层：建卡、决策；不碰 Request、不返回 HTTP 状态码。
 class ApprovalService:
     def __init__(self, session: AsyncSession) -> None:
@@ -81,7 +86,7 @@ class ApprovalService:
             status="pending",
             idempotency_key=key,
             interrupt_id=interrupt.id,
-            expires_at=datetime.now(UTC) + CARD_TTL,
+            expires_at=datetime.now(UTC) + CARD_TTL,  # 存入过期时间
         )
         await self.repo.add(row)
         await self.session.commit()
@@ -97,19 +102,37 @@ class ApprovalService:
     ) -> Sequence[Approval]:
         return await self.repo.list_by_user(user_id, status, limit, offset)
 
-    # 决策：CAS 迁移状态；返回 None 表示不存在或不是你的（router 转 404）。
+    # 决策：过期校验 -> CAS 迁移 -> 返回最新快照；None 表示不存在或不是你的。
     async def decide(self, approval_id: str, user_id: int, body: DecisionIn) -> Approval | None:
         row = await self.repo.get_owned(approval_id, user_id)
         if row is None:
             return None
 
-        new_status = "approved" if body.decision == "approve" else "rejected"
-        changed = await self.repo.decide_cas(approval_id, user_id, new_status, body.note)
-        if changed == 0:  # 那就是没抢到，理论上不可能，或者说被提前改了
+        # 过期先于 CAS：过期的卡不管并发与否都不该被执行。
+        if row.expires_at is not None and datetime.now(UTC) > row.expires_at:
+            await self.repo.decide_cas(approval_id, user_id, "expired", "卡片已过期")
+            await self.session.commit()
+            raise ApprovalExpiredError("审批已过期")
+
+        new_status = "approved" if body.decision in ("approve", "edit") else "rejected"
+        changed = await self.repo.decide_cas(
+            approval_id,
+            user_id,
+            new_status,
+            body.note,
+            body.edited_args,
+        )
+        if changed == 0:
             await self.session.rollback()
             raise ApprovalConflictError("审批已处理")
         await self.session.commit()
 
         fresh = await self.repo.get_owned(approval_id, user_id)
-        logger.info("审批已决策", approval_id=approval_id, status=new_status, user_id=user_id)
+        logger.info(
+            "审批已决策",
+            approval_id=approval_id,
+            status=new_status,
+            decision=body.decision,
+            user_id=user_id,
+        )
         return fresh

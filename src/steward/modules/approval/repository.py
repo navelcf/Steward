@@ -54,6 +54,7 @@ class ApprovalRepository:
         user_id: int,
         new_status: str,
         note: str | None,
+        edited_args: dict | None = None,
     ) -> int:
         stmt = (
             update(Approval)
@@ -66,6 +67,7 @@ class ApprovalRepository:
                 status=new_status,
                 decided_at=datetime.now(UTC),  # datetime.now(timezone.utc)这种写法一样的
                 decision_note=note,
+                edited_args=edited_args,
             )
         )
         result = await self.session.execute(stmt)

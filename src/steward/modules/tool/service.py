@@ -59,6 +59,7 @@ async def ensure_registered(factory: async_sessionmaker[AsyncSession]) -> None:
 async def load_toolset(
     session: AsyncSession,
     user_id: int,
+    note_id: str | None = None,
 ) -> tuple[list[BaseTool], dict[str, bool | InterruptOnConfig]]:
     rows: Sequence[ToolRegistry] = await ToolRepository(session).list_all()
     tools: list[BaseTool] = []
@@ -76,7 +77,7 @@ async def load_toolset(
         if row.name == "get_current_time":
             tools.append(get_current_time)
         elif row.name == "save_note":
-            tools.append(build_save_note(user_id))
+            tools.append(build_save_note(user_id, note_id))  # 这个和上面那个不一样，这个出来的就是一个basetool类
         else:
             logger.warning("注册表里有未知工具，跳过", tool=row.name)
             continue
