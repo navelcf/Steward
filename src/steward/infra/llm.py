@@ -24,6 +24,7 @@ def init_llm(app: FastAPI) -> None:
         extra_body={"thinking": {"type": settings.llm.thinking}},
         # temperature 在思考模式不生效；默认已关闭思考，这个值才真正起作用。
         temperature=settings.llm.temperature,
+        stream_usage=settings.llm.stream_usage,      # ← 加这一行，才有token
     )
     logger.info(
         "模型客户端就绪",

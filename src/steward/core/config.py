@@ -144,6 +144,10 @@ class LlmSettings(EnvSettings):
         alias="MAX_DOC_TOKENS",
         default=80000,
     )
+    stream_usage: bool = Field(
+        alias="STREAM_USAGE",
+        default=True,
+    )
 
 
 class Settings(BaseSettings):

@@ -34,6 +34,8 @@ from steward.modules.tool.service import ensure_registered
 from steward.modules.approval.models import Approval
 from steward.modules.approval.router import router as approval_router
 
+from steward.modules.trace.models import RunTrace
+from steward.modules.trace.router import router as trace_router
 # 初始化日志系统
 configure_logging(settings.logging.level)
 logger = get_logger(__name__)
@@ -60,6 +62,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # 异步生成器对�
             Message.__tablename__,
             ToolRegistry.__tablename__,
             Approval.__tablename__,
+            RunTrace.__tablename__,
         ],
     )
     async with app.state.db_engine.begin() as conn:
@@ -114,6 +117,9 @@ app.include_router(tool_router)
 
 app.include_router(approval_router)
 # 挂上审批卡片路由
+
+app.include_router(trace_router)
+# 挂上跟踪路由
 
 
 # 测试接口

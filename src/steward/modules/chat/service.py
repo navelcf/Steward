@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 from pathlib import Path
-from uuid import UUID
+from uuid import UUID, uuid4
 # UUID:解析校验file_id
 
 from fastapi import Request
@@ -11,7 +11,7 @@ from steward.core.config import settings
 from steward.core.logging import get_logger
 from steward.modules.file.service import ALLOWED_SUFFIXES, STORAGE_ROOT, TOKEN_FACTOR, extract_text
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from steward.modules.chat.models import Message
 from steward.modules.chat.repository import MessageRepository
 from steward.modules.chat.schemas import MessageListOut, MessageOut
@@ -30,6 +30,10 @@ from steward.modules.tool.service import load_toolset
 from steward.common.sse import sse_event
 
 from langgraph.types import Command
+
+from sqlalchemy import select
+from steward.modules.trace.repository import TraceRepository
+from steward.modules.trace.service import TraceCollector
 
 logger = get_logger(__name__)
 
@@ -89,6 +93,36 @@ def build_message(message: str, file_id: str | None, user_id: int) -> str:
     return "\n\n".join(sections)  # 转换为字符串，用\n\n分隔
 
 
+
+
+# 取本轮 run_id：首轮新生成；恢复轮次复用该会话最后一条 user 消息的 run_id。
+# base_step 让恢复轮次的 step 接着已有记录往后排（langgraph_step 会从 1 重来，不能用）。
+async def _prepare_run(
+    factory: async_sessionmaker[AsyncSession],
+    thread_id: str,
+    is_resume: bool,
+) -> tuple[str, int]:
+    if not is_resume:
+        return str(uuid4()), 0
+
+    async with factory() as session:
+        run_id = await session.scalar(
+            select(Message.run_id)
+            .where(
+                Message.thread_id == thread_id,
+                Message.role == "user",
+                Message.run_id.is_not(None),
+            )
+            .order_by(Message.id.desc())
+            .limit(1)
+        )
+        if run_id is None:
+            return str(uuid4()), 0
+        base = await TraceRepository(session).max_step(run_id)
+        return run_id, base
+
+
+
 # 异步生成器：分三段管 DB 连接，中间那段纯流式，不占连接。
 # 这里非常重要，session开始用的时候再用，别一直在流式的时候还占着
 # 所以这里必须自己开session，不能让depends来开
@@ -102,20 +136,27 @@ async def event_stream(
     note_id: str | None = None,
 ) -> AsyncGenerator[ServerSentEvent, None]:
     factory = request.app.state.db_session_factory
+    # 本轮 run_id 与 step 起点；轨迹的每一行都挂在它下面。
+    run_id, base_step = await _prepare_run(factory, thread_id, resume is not None)
+    # 业务 run_id，用于标识一次完整的用户会话
+    collector = TraceCollector(run_id, user_id, thread_id, base_step)
+
+
 
     # 段 1：落 user 消息 -> commit，然后立刻释放连接。
     # 归属校验已挪到 deps.get_owned_thread（依赖层），这里不再重复查。
-    if resume is not None:
+    if resume is None:
         try:
             async with factory() as session:  # 注意with，用完赶紧关闭
                 await MessageRepository(session).add(
-                    Message(thread_id=thread_id, user_id=user_id, role="user", content=message)
+                    Message(thread_id=thread_id, user_id=user_id, role="user", content=message, run_id=run_id)
                 )
                 await session.commit()
         except Exception:
             logger.exception("消息落库失败", user_id=user_id, thread_id=thread_id)
             yield _sse("error", {"message": "消息保存失败，请稍后重试"})
             yield _sse("done", {"ok": False})
+            await collector.flush(factory)
             return
 
     # 组装本轮消息；文档错误在开流之前就能确定，直接发 error + done 干净收尾。
@@ -130,11 +171,11 @@ async def event_stream(
             return
 
     # 段 2：流式调 Agent，这段时间不持有任何数据库连接。
+    # 段 2：流式调 Agent，这段时间不持有任何数据库连接。
     buffer: list[str] = []
     try:
         async with factory() as session:
-            tools, interrupt_on = await load_toolset(session, user_id)
-            # 读完可用工具，立刻释放连接
+            tools, interrupt_on = await load_toolset(session, user_id, note_id)
         agent = build_agent(
             request.app.state.chat_model,
             tools,
@@ -143,29 +184,71 @@ async def event_stream(
         )
         config = {"configurable": {"thread_id": thread_id}}
         inputs = resume if resume is not None else {"messages": [{"role": "user", "content": prompt}]}
-        async for event in agent.astream_events(
-            inputs,
-            config=config,
-            version="v2",
-        ):
-            if event["event"] != "on_chat_model_stream":  # 过滤掉非聊天流事件
+        async for event in agent.astream_events(inputs, config=config, version="v2"):
+            kind = event["event"]
+            key = event.get("run_id", "")# ← 事件 run_id，只当秒表的 key
+
+            if kind == "on_chat_model_stream":
+                delta = event["data"]["chunk"].content
+                if isinstance(delta, str) and delta:
+                    buffer.append(delta)
+                    yield _sse("message", {"delta": delta})
                 continue
-            delta = event["data"]["chunk"].content
-            if isinstance(delta, str) and delta:  # 判断 delta 是否为字符串且不为空
-                buffer.append(delta)
-                yield _sse("message", {"delta": delta})
+
+            if kind == "on_chat_model_start":
+                collector.begin(key)
+                continue
+
+            if kind == "on_chat_model_end":
+                output = event["data"].get("output")
+                # 真实模型才有 usage；假模型 / 未开 usage 流式时是 None，落 NULL 不报错。
+                usage = getattr(output, "usage_metadata", None) or {}# 取token
+                # 要开stream_usage=True,      # ← 加这一行
+                collector.add(
+                    kind="model",
+                    name=type(output).__name__,
+                    input_data=event["data"].get("input"),
+                    output_data=getattr(output, "content", ""),
+                    latency_ms=collector.end(key),
+                    prompt_tokens=usage.get("input_tokens"),
+                    completion_tokens=usage.get("output_tokens"),
+                )
+                continue
+
+            if kind == "on_tool_start":
+                collector.begin(key)
+                collector.remember_tool(key, event.get("name", ""), event["data"].get("input"))
+                continue
+
+            if kind == "on_tool_end":
+                remembered = collector.pop_tool(key)
+                name = remembered[0] if remembered else event.get("name", "")
+                args = remembered[1] if remembered else None
+                output = event["data"].get("output")
+                collector.add(
+                    kind="tool",
+                    name=name,
+                    input_data=args,
+                    output_data=getattr(output, "content", output),
+                    latency_ms=collector.end(key),
+                )
+                continue
     except Exception:
-        # 半截回答不落库（W2 Day1 3.4）；流已经开始，改不了状态码，只能补 error 事件。
         logger.exception("Agent 流式生成失败", user_id=user_id)
+        collector.add(kind="error", name="agent_stream", output_data={"message": "生成失败"})
         yield _sse("error", {"message": "生成失败，请稍后重试"})
         yield _sse("done", {"ok": False})
+        await collector.flush(factory)
         return
+
+
 
     # 段 2.5：Agent 正常结束但可能停在中断点；每个中断建一张卡并推给前端。
     # 实测：中断不会抛异常，astream_events 正常结束，所以要主动 aget_state 检查。
     try:
         snapshot = await agent.aget_state(config)
         # 从 checkpointer 里读「这个 thread_id 当前的状态快照」
+        # checkpointer 每走完一步都自动存一张，`aget_state` 只是把 “最新的那张” 调出来给你看。
         pending = [item for task in snapshot.tasks for item in task.interrupts]
         # 两层列表推导式：先从每个 task 中取中断列表，再把所有中断列表合并成一个列表
         # 外层：遍历每个待执行任务，内层：遍历这个任务里的每个中断
@@ -193,8 +276,16 @@ async def event_stream(
         if not cards:
             yield _sse("error", {"message": "审批卡创建失败，请重试"})
             yield _sse("done", {"ok": False})
+            await collector.flush(factory)
             return
         for card in cards:
+            collector.add(
+                kind="approval",
+                name=card.tool_name,
+                input_data=card.args_json,
+                output_data={"approval_id": card.id, "status": card.status},
+            )
+
             yield _sse(
                 "interrupt",
                 {
@@ -211,6 +302,7 @@ async def event_stream(
         # 中断轮次不落 assistant 消息：回答还没完成，落半截会污染历史。
         # cards 是成功数量：部分失败时前端能据此和 GET /approvals 对账。
         yield _sse("done", {"ok": True, "interrupted": True, "cards": len(cards)})
+        await collector.flush(factory)
         return
 
     # 段 3：只有成功走完整个流，才把完整回答落库（API 契约，不是给模型看的）。
@@ -222,6 +314,7 @@ async def event_stream(
                     user_id=user_id,
                     role="assistant",
                     content="".join(buffer),
+                    run_id=run_id,
                 )
             )
             await session.commit()
@@ -229,9 +322,11 @@ async def event_stream(
         logger.exception("回答落库失败", user_id=user_id, thread_id=thread_id)
         yield _sse("error", {"message": "回答保存失败"})
         yield _sse("done", {"ok": False})
+        await collector.flush(factory)
         return
 
     yield _sse("done", {"ok": True})
+    await collector.flush(factory)
 
 
 # 会话不存在（或不是自己的）；router 统一转 404。
