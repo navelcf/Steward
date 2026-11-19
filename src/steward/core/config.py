@@ -66,8 +66,8 @@ class DatabaseSettings(EnvSettings):
     max_overflow: int = Field(alias="DB_MAX_OVERFLOW", default=10)  # 连接池溢出最大值
     pool_recycle: int = Field(alias="DB_POOL_RECYCLE", default=1800)  # 连接池回收时间
 
-    @computed_field
-    @property
+    @computed_field# 加了 `@computed_field`，Pydantic 就把这个属性当成一个「算出来的字段」
+    @property  # a.url 访问属性，直接取，不用括号
     def url(self) -> str:
         # 交给 SQLAlchemy 的 asyncpg 连接串。
 
@@ -150,12 +150,29 @@ class LlmSettings(EnvSettings):
     )
 
 
+class MilvusSettings(EnvSettings):
+    # Milvus 连接信息；localhost 用 127.0.0.1，容器内互访用服务名。
+    host: str = Field(alias="MILVUS_HOST", default="127.0.0.1")
+    port: int = Field(alias="MILVUS_PORT", default=19530)
+    # 集合名带版本号，改 schema 时建 v2 而不是原地改（方案 7.4 L911）。
+    collection: str = Field(alias="MILVUS_COLLECTION", default="child_chunks_v1")
+    # dense 维度；和 embedding 模型输出必须一致（方案定 1024）。
+    dim: int = Field(alias="EMBEDDING_DIM", default=1024)
+
+    @computed_field
+    @property
+    def uri(self) -> str:
+        # MilvusClient 要 http:// 前缀，不是 host:port。
+        return f"http://{self.host}:{self.port}"
+
+
 class Settings(BaseSettings):
     app: AppSettings = Field(default_factory=AppSettings)
     db: DatabaseSettings = Field(default_factory=DatabaseSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     llm: LlmSettings = Field(default_factory=LlmSettings)
+    milvus: MilvusSettings = Field(default_factory=MilvusSettings)
 
 
 settings = Settings()

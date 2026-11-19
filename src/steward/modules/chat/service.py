@@ -93,8 +93,6 @@ def build_message(message: str, file_id: str | None, user_id: int) -> str:
     return "\n\n".join(sections)  # 转换为字符串，用\n\n分隔
 
 
-
-
 # 取本轮 run_id：首轮新生成；恢复轮次复用该会话最后一条 user 消息的 run_id。
 # base_step 让恢复轮次的 step 接着已有记录往后排（langgraph_step 会从 1 重来，不能用）。
 async def _prepare_run(
@@ -122,7 +120,6 @@ async def _prepare_run(
         return run_id, base
 
 
-
 # 异步生成器：分三段管 DB 连接，中间那段纯流式，不占连接。
 # 这里非常重要，session开始用的时候再用，别一直在流式的时候还占着
 # 所以这里必须自己开session，不能让depends来开
@@ -140,8 +137,6 @@ async def event_stream(
     run_id, base_step = await _prepare_run(factory, thread_id, resume is not None)
     # 业务 run_id，用于标识一次完整的用户会话
     collector = TraceCollector(run_id, user_id, thread_id, base_step)
-
-
 
     # 段 1：落 user 消息 -> commit，然后立刻释放连接。
     # 归属校验已挪到 deps.get_owned_thread（依赖层），这里不再重复查。
@@ -186,7 +181,7 @@ async def event_stream(
         inputs = resume if resume is not None else {"messages": [{"role": "user", "content": prompt}]}
         async for event in agent.astream_events(inputs, config=config, version="v2"):
             kind = event["event"]
-            key = event.get("run_id", "")# ← 事件 run_id，只当秒表的 key
+            key = event.get("run_id", "")  # ← 事件 run_id，只当秒表的 key
 
             if kind == "on_chat_model_stream":
                 delta = event["data"]["chunk"].content
@@ -202,12 +197,49 @@ async def event_stream(
             if kind == "on_chat_model_end":
                 output = event["data"].get("output")
                 # 真实模型才有 usage；假模型 / 未开 usage 流式时是 None，落 NULL 不报错。
-                usage = getattr(output, "usage_metadata", None) or {}# 取token
-                # 要开stream_usage=True,      # ← 加这一行
+                usage = getattr(output, "usage_metadata", None) or {}
+
+                # input 是完整 messages 列表（结构为 {"messages": [[msg, ...]]}）。
+                # 只取最后一条：否则 2000 字符会被 system prompt 和旧历史吃满，
+                # 本轮输入反而被截掉（实测 step 5/8 的 input 全是 system 开头）。
+                raw_input = event["data"].get("input")
+                # 实际长相：{"messages": [[AIMessage(...), HumanMessage(...), ...]]}
+                input_brief: object = raw_input
+                # 改为只保留最后一句话
+                try:
+                    msgs: list = []
+                    if isinstance(raw_input, dict):
+                        # `isinstance(x, T)` 问：你是不是 T 类型？
+                        batches = raw_input.get("messages") or []
+                        if batches and isinstance(batches[0], (list, tuple)):
+                            msgs = list(batches[0])
+                        elif batches:
+                            msgs = list(batches)
+                    elif hasattr(raw_input, "to_messages"):
+                        # `hasattr(x, "n")`问：你有 `n` 这个方法 / 属性吗？
+                        # 有些 provider 的 `on_chat_model_end` 直接给 `ChatPromptValue`，不给 dict。
+                        # `ChatPromptValue` 有个 `to_messages()` 方法，转成 `list[BaseMessage]`
+                        msgs = raw_input.to_messages()
+                    elif isinstance(raw_input, (list, tuple)):
+                        msgs = list(raw_input)
+
+                    if msgs:
+                        last = msgs[-1]
+                        # 取最后一条
+                        input_brief = {
+                            "count": len(msgs),
+                            "last_role": getattr(last, "type", "") or "",
+                            "last": str(getattr(last, "content", "") or "")[:500],
+                            # `getattr(x, "n", d)` 取：把 `n` 给我，没有就用 `d`
+                        }
+                except Exception:
+                    logger.exception("trace input 摘要失败，退回原文", thread_id=thread_id)
+                    input_brief = raw_input
+
                 collector.add(
                     kind="model",
                     name=type(output).__name__,
-                    input_data=event["data"].get("input"),
+                    input_data=input_brief,
                     output_data=getattr(output, "content", ""),
                     latency_ms=collector.end(key),
                     prompt_tokens=usage.get("input_tokens"),
@@ -240,8 +272,6 @@ async def event_stream(
         yield _sse("done", {"ok": False})
         await collector.flush(factory)
         return
-
-
 
     # 段 2.5：Agent 正常结束但可能停在中断点；每个中断建一张卡并推给前端。
     # 实测：中断不会抛异常，astream_events 正常结束，所以要主动 aget_state 检查。

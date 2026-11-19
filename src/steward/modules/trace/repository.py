@@ -18,7 +18,7 @@ class TraceRepository:
         stmt = (
             select(RunTrace)
             .where(RunTrace.run_id == run_id, RunTrace.user_id == user_id)
-            .order_by(RunTrace.step.asc())# 升序
+            .order_by(RunTrace.step.asc())  # 升序
         )
         return (await self.session.scalars(stmt)).all()
 

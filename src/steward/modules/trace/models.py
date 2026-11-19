@@ -13,7 +13,7 @@ class RunTrace(Base, CreatedAtMixin):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     # 业务 run_id：首轮生成，恢复轮次复用（靠 messages.run_id 传递）。
-    run_id: Mapped[str] = mapped_column(String(36), nullable=False)# 任务，或者说轮次id，一次完整
+    run_id: Mapped[str] = mapped_column(String(36), nullable=False)  # 任务，或者说轮次id，一次完整
     user_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey("users.id", ondelete="CASCADE"),
@@ -24,10 +24,12 @@ class RunTrace(Base, CreatedAtMixin):
         ForeignKey("chat_threads.id", ondelete="CASCADE"),
         nullable=False,
     )
-    step: Mapped[int] = mapped_column(Integer, nullable=False)# 同一个 run_id 内从 1 递增
+    step: Mapped[int] = mapped_column(Integer, nullable=False)  # 同一个 run_id 内从 1 递增
     # model / tool / approval / error 四类（方案 4.3 L455）。
     kind: Mapped[str] = mapped_column(String(20), nullable=False)
-    name: Mapped[str | None] = mapped_column(String(120), nullable=True)# 具体叫什么：模型名、工具名、卡片 id、错误类型
+    name: Mapped[str | None] = mapped_column(
+        String(120), nullable=True
+    )  # 具体叫什么：模型名、工具名、卡片 id、错误类型
     # 方案 DDL 就叫 input / output；存截断后的摘要，绝不存全文（见坑表 6）。
     input: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     # 这步的输入（JSONB）。模型步放本轮消息摘要，工具步放参数 `{"content": "..."}`

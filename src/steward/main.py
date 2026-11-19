@@ -36,6 +36,9 @@ from steward.modules.approval.router import router as approval_router
 
 from steward.modules.trace.models import RunTrace
 from steward.modules.trace.router import router as trace_router
+
+
+from steward.infra.milvus import close_milvus, init_milvus
 # 初始化日志系统
 configure_logging(settings.logging.level)
 logger = get_logger(__name__)
@@ -80,9 +83,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # 异步生成器对�
 
     init_llm(app)
 
+    init_milvus(app)
+    # 同步，会卡哦，但是没关系，一次性的
+    # `MilvusClient` 没有；异步要用 `pymilvus.AsyncMilvusClient` 这个另一套类
+
     try:
         yield
     finally:
+        close_milvus(app)
         await close_checkpointer(app)  # 先关 Checkpointer 的 psycopg 池，再关 SQLAlchemy 的 asyncpg 池
         await close_database(app)
         logger.info("应用关闭", app=settings.app.name)

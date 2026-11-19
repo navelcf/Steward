@@ -23,7 +23,10 @@ def brief(value: object, limit: int = BRIEF_LIMIT) -> str:
     else:
         text = json.dumps(value, ensure_ascii=False, default=str)
     return text[:limit]
+
+
 # 把任何东西压成「不超过 2000 字符的字符串」。
+
 
 # 一次请求一个收集器；只攒内存，流结束（或失败）时批量落库，流式期间零 DB 连接。
 class TraceCollector:
@@ -38,9 +41,9 @@ class TraceCollector:
         self.user_id = user_id
         self.thread_id = thread_id
         self._rows: list[RunTrace] = []
-        self._step = base_step# 已经到第几步了
-        self._started: dict[str, float] = {}# 记录开始时间
-        self._tool_args: dict[str, tuple[str, object]] = {}# 暂存工具参数
+        self._step = base_step  # 已经到第几步了
+        self._started: dict[str, float] = {}  # 记录开始时间
+        self._tool_args: dict[str, tuple[str, object]] = {}  # 暂存工具参数
 
     @property
     def count(self) -> int:
@@ -66,6 +69,7 @@ class TraceCollector:
 
     def pop_tool(self, key: str) -> tuple[str, object] | None:
         return self._tool_args.pop(key, None)
+
     # LangGraph 给你两条事件：
     # - `on_tool_start` → 你知道「要调 `save_note`，参数是 X」，但不知道结果
     # - `on_tool_end` → 你才知道「返回了 `4/xxx.md`」
