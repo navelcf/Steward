@@ -1,0 +1,2 @@
+没什么好写的，docker里的milvus我早就配好了，唯一的问题是以后上云的话，云端要不要配docker？到那时候一定要用compose配，把etcd和milvus分开来，不然老是出问题。
+

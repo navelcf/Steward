@@ -166,6 +166,14 @@ class MilvusSettings(EnvSettings):
         return f"http://{self.host}:{self.port}"
 
 
+class EmbeddingSettings(EnvSettings):
+    # 百炼 API Key；embedding 专用，和 DeepSeek 的 key 不是同一个。
+    api_key: str = Field(alias="DASHSCOPE_API_KEY", min_length=1)
+    # 换模型只改这一行；维度跟着模型走，但 Milvus 集合已按 1024 建好。
+    model: str = Field(alias="EMBEDDING_MODEL", default="text-embedding-v4")
+
+
+
 class Settings(BaseSettings):
     app: AppSettings = Field(default_factory=AppSettings)
     db: DatabaseSettings = Field(default_factory=DatabaseSettings)
@@ -173,6 +181,7 @@ class Settings(BaseSettings):
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     llm: LlmSettings = Field(default_factory=LlmSettings)
     milvus: MilvusSettings = Field(default_factory=MilvusSettings)
+    embedding: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
 
 
 settings = Settings()

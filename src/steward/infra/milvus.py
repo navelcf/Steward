@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI,Request
 from pymilvus import DataType, Function, FunctionType, MilvusClient
 
 from steward.core.config import settings
@@ -94,3 +94,8 @@ def close_milvus(app: FastAPI) -> None:
         return
     client.close()
     logger.info("Milvus 客户端已关闭")
+
+
+# FastAPI 依赖：取 lifespan 建好的客户端；没成功就是 None，由调用方转 503。
+def get_milvus(request: Request) -> MilvusClient | None:
+    return getattr(request.app.state, "milvus", None)
