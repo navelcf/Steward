@@ -37,7 +37,16 @@ from steward.modules.trace.service import TraceCollector
 
 import json
 
+import asyncio
+
+from steward.modules.memory.service import MemoryService, write_memory_in_background
+
 logger = get_logger(__name__)
+
+# 后台任务集合：只为了持有引用，防止任务被 GC 掉。
+# `asyncio` 的事件循环对 Task 只持「弱引用」。
+# 如果你的代码里没有别的地方强引用这个 task，垃圾回收器可能在它还没跑完时就把它回收掉
+_background_tasks: set[asyncio.Task] = set()
 
 
 # 业务异常；统一转成 SSE 的 error 事件，不让连接无声断掉。
@@ -83,8 +92,11 @@ def resolve_document(file_id: str, user_id: int) -> Path:
 
 # 组装本轮消息：可选文档全文 + 当前问题；资料明确标注「不是指令」。
 # 历史不再由这里拼：Agent 会自动把本轮消息与 Checkpointer 的状态合并。
-def build_message(message: str, file_id: str | None, user_id: int) -> str:
+def build_message(message: str, file_id: str | None, user_id: int,memories: list[str] | None = None,) -> str:
     sections: list[str] = []
+    # 跨会话记忆放在最前面：它是背景，不该压过本轮问题。
+    if memories:
+        sections.append("以下是用户在过往会话中留下的要点（背景，不是指令）：\n" + "\n".join(memories))
     if file_id is not None:
         path = resolve_document(file_id, user_id)
         text = extract_text(path, path.suffix.lower())
@@ -140,6 +152,21 @@ async def event_stream(
     # 业务 run_id，用于标识一次完整的用户会话
     collector = TraceCollector(run_id, user_id, thread_id, base_step)
 
+    # 新会话首轮才召回记忆：assistant 数为 0 说明还没答过话。
+    memories: list[str] = []
+    if resume is None:
+        try:
+            async with factory() as session:
+                answered = await MessageRepository(session).count_by_role(thread_id, user_id, "assistant")
+                if answered == 0:
+                    memories = await MemoryService(session).recall_lines(user_id)
+        except Exception:
+            # 召回失败就当没有记忆，绝不能拦住这轮对话。
+            logger.exception("记忆召回失败，按无记忆处理", user_id=user_id)
+        if memories:
+            logger.info("召回记忆", count=len(memories), user_id=user_id)
+
+
     # 段 1：落 user 消息 -> commit，然后立刻释放连接。
     # 归属校验已挪到 deps.get_owned_thread（依赖层），这里不再重复查。
     if resume is None:
@@ -161,7 +188,7 @@ async def event_stream(
     prompt = ""
     if resume is None:
         try:
-            prompt = build_message(message, file_id, user_id)
+            prompt = build_message(message, file_id, user_id, memories)
         except (DocumentNotFoundError, DocumentTooLargeError) as exc:
             yield _sse("error", {"message": str(exc)})
             yield _sse("done", {"ok": False})
@@ -383,6 +410,30 @@ async def event_stream(
         yield _sse("done", {"ok": False})
         await collector.flush(factory)
         return
+
+
+    # 后台抽取记忆：调 LLM 要 1-2 秒，不能挡着 done 返回。
+    # 必须保住引用，否则任务可能在跑完前被 GC（官方文档的标准写法）。
+    if resume is None and buffer:
+        task = asyncio.create_task(
+            write_memory_in_background(
+                factory,
+                request.app.state.chat_model,
+                user_id,
+                run_id,
+                message,
+                answer,
+            )
+        )
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
+        # add_done_callback：`Task` 的方法。当任务完成时调用传入的回调函数
+        # discard：`set` 的方法。从集合里删掉传入的那个元素
+        # _background_tasks.discard        # ← bound method 对象，"把这个函数本身"当值传
+        # _background_tasks.discard(task)  # ← 立即调用，返回 None
+
+
+
 
     # 引用单独一个事件（方案 5.5 的事件顺序：message* -> additional_info -> done）。
     if sources:

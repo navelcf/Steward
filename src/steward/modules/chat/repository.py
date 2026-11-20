@@ -34,6 +34,20 @@ class MessageRepository:
         # SELECT count(*) FROM messages WHERE messages.thread_id = ? AND messages.user_id = ?
         return await self.session.scalar(stmt) or 0
 
+
+    # 这个会话里某个角色有几条；用来判断「是不是新会话首轮」。
+    async def count_by_role(self, thread_id: str, user_id: int, role: str) -> int:
+        stmt = (
+            select(func.count())
+            .select_from(Message)
+            .where(
+                Message.thread_id == thread_id,
+                Message.user_id == user_id,
+                Message.role == role,
+            )
+        )
+        return await self.session.scalar(stmt) or 0
+
     # 只 flush 不 commit：由 service 决定事务边界。
     async def add(self, message: Message) -> None:
         self.session.add(message)

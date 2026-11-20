@@ -57,15 +57,15 @@ vectors = embeddings.embed\_documents(texts)    # 批量 → list\[list\[float]]
 
 
 
-\# `parent\\\_chunks` 表：\*\*为什么父块要回 Postgres\*\*
+\# `parent\\\\\\\_chunks` 表：\*\*为什么父块要回 Postgres\*\*
 
 
 
-\*\*你的疑惑正是这里：既然 Milvus 里已经有 `raw\\\_content` 存父块全文了，为什么还要一张 Postgres 表？\*\*
+\*\*你的疑惑正是这里：既然 Milvus 里已经有 `raw\\\\\\\_content` 存父块全文了，为什么还要一张 Postgres 表？\*\*
 
 
 
-\## 因为 `raw\\\_content` 是\*\*副本\*\*，`parent\\\_chunks` 才是\*\*权威\*\*
+\## 因为 `raw\\\\\\\_content` 是\*\*副本\*\*，`parent\\\\\\\_chunks` 才是\*\*权威\*\*
 
 
 
@@ -77,7 +77,7 @@ vectors = embeddings.embed\_documents(texts)    # 批量 → list\[list\[float]]
 
 
 
-\*\*Milvus 的 `raw\\\_content` 是 `VARCHAR(4096)`。\*\*
+\*\*Milvus 的 `raw\\\\\\\_content` 是 `VARCHAR(4096)`。\*\*
 
 
 
@@ -93,7 +93,7 @@ vectors = embeddings.embed\_documents(texts)    # 批量 → list\[list\[float]]
 
 
 
-\*\*这时候 Milvus 的 `raw\\\_content` 就只能截断（存前 4096 字），完整版以 `parent\\\_chunks.content` 为准。\*\*
+\*\*这时候 Milvus 的 `raw\\\\\\\_content` 就只能截断（存前 4096 字），完整版以 `parent\\\\\\\_chunks.content` 为准。\*\*
 
 
 
@@ -107,7 +107,7 @@ vectors = embeddings.embed\_documents(texts)    # 批量 → list\[list\[float]]
 
 1\. \*\*删 `documents` 这一行\*\*
 
-2\. \*\*找到这篇文档的所有父块\*\* → 才能知道要去 Milvus 删哪些 `parent\\\_id` 下的子块
+2\. \*\*找到这篇文档的所有父块\*\* → 才能知道要去 Milvus 删哪些 `parent\\\\\\\_id` 下的子块
 
 \*\*Postgres 里一句 SQL：\*\*
 
@@ -115,7 +115,7 @@ vectors = embeddings.embed\_documents(texts)    # 批量 → list\[list\[float]]
 
 ```
 
-SELECT id FROM parent\\\_chunks WHERE doc\\\_id = 'a3f8...'
+SELECT id FROM parent\\\\\\\_chunks WHERE doc\\\\\\\_id = 'a3f8...'
 
 ```
 
@@ -135,7 +135,7 @@ SELECT id FROM parent\\\_chunks WHERE doc\\\_id = 'a3f8...'
 
 
 
-\*\*这只用到 `parent\\\_chunks`（`section\\\_path` + `content`），完全不需要 Milvus。\*\*
+\*\*这只用到 `parent\\\\\\\_chunks`（`section\\\\\\\_path` + `content`），完全不需要 Milvus。\*\*
 
 
 
@@ -190,17 +190,17 @@ users
 
 2\. \*\*Milvus 混合检索 → 命中 3 个子块\*\*
 
-3\. \*\*按 `parent\\\_id` 去重 → 得到 1 个父块\*\*
+3\. \*\*按 `parent\\\\\\\_id` 去重 → 得到 1 个父块\*\*
 
-4\. \*\*取 Milvus 的 `raw\\\_content`（正常情况够用）\*\*
+4\. \*\*取 Milvus 的 `raw\\\\\\\_content`（正常情况够用）\*\*
 
-5\. \*\*如果 `raw\\\_content` 被截断（`char\\\_count > 4096`），回 Postgres 查 `parent\\\_chunks.content` 拿完整版\*\*
+5\. \*\*如果 `raw\\\\\\\_content` 被截断（`char\\\\\\\_count > 4096`），回 Postgres 查 `parent\\\\\\\_chunks.content` 拿完整版\*\*
 
 6\. \*\*拼进 prompt\*\*
 
 
 
-\*\*第 5 步就是 `parent\\\_chunks` 存在的现实价值。\*\*
+\*\*第 5 步就是 `parent\\\\\\\_chunks` 存在的现实价值。\*\*
 
 
 
@@ -240,29 +240,29 @@ Content-Type: multipart/form-data
 
 {
 
-\&#x20; "id": "a3f8c2d1-...",
+\\\&#x20; "id": "a3f8c2d1-...",
 
-\&#x20; "filename": "茅台2023年报.pdf",
+\\\&#x20; "filename": "茅台2023年报.pdf",
 
-\&#x20; "mime\\\_type": "application/pdf",
+\\\&#x20; "mime\\\\\\\_type": "application/pdf",
 
-\&#x20; "size\\\_bytes": 8762,
+\\\&#x20; "size\\\\\\\_bytes": 8762,
 
-\&#x20; "status": "uploaded",
+\\\&#x20; "status": "uploaded",
 
-\&#x20; "version": 1,
+\\\&#x20; "version": 1,
 
-\&#x20; "page\\\_count": null,
+\\\&#x20; "page\\\\\\\_count": null,
 
-\&#x20; "char\\\_count": null,
+\\\&#x20; "char\\\\\\\_count": null,
 
-\&#x20; "is\\\_indexed": false,
+\\\&#x20; "is\\\\\\\_indexed": false,
 
-\&#x20; "parser": null,
+\\\&#x20; "parser": null,
 
-\&#x20; "error\\\_message": null,
+\\\&#x20; "error\\\\\\\_message": null,
 
-\&#x20; "created\\\_at": "2026-11-19T11:00:00Z"
+\\\&#x20; "created\\\\\\\_at": "2026-11-19T11:00:00Z"
 
 }
 
@@ -270,7 +270,7 @@ Content-Type: multipart/form-data
 
 
 
-\*\*注意 `page\\\_count` / `char\\\_count` 是 `null`\*\* —— 因为还没解析。
+\*\*注意 `page\\\\\\\_count` / `char\\\\\\\_count` 是 `null`\*\* —— 因为还没解析。
 
 
 
@@ -282,15 +282,15 @@ Content-Type: multipart/form-data
 
 {
 
-\&#x20; "status": "indexed",
+\\\&#x20; "status": "indexed",
 
-\&#x20; "page\\\_count": 12,
+\\\&#x20; "page\\\\\\\_count": 12,
 
-\&#x20; "char\\\_count": 8762,
+\\\&#x20; "char\\\\\\\_count": 8762,
 
-\&#x20; "is\\\_indexed": true,
+\\\&#x20; "is\\\\\\\_indexed": true,
 
-\&#x20; "parser": "pypdf"
+\\\&#x20; "parser": "pypdf"
 
 }
 
@@ -314,11 +314,11 @@ Content-Type: multipart/form-data
 
 {
 
-\&#x20; "query": "高粱占成本多少",
+\\\&#x20; "query": "高粱占成本多少",
 
-\&#x20; "top\\\_k": 20,
+\\\&#x20; "top\\\\\\\_k": 20,
 
-\&#x20; "doc\\\_ids": \\\["a3f8c2d1-..."]
+\\\&#x20; "doc\\\\\\\_ids": \\\\\\\["a3f8c2d1-..."]
 
 }
 
@@ -334,43 +334,43 @@ Content-Type: multipart/form-data
 
 {
 
-\&#x20; "query": "高粱占成本多少",
+\\\&#x20; "query": "高粱占成本多少",
 
-\&#x20; "hits": \\\[
+\\\&#x20; "hits": \\\\\\\[
 
-\&#x20;   {
+\\\&#x20;   {
 
-\&#x20;     "child\\\_id": "doc1\\\_sec32\\\_c2",
+\\\&#x20;     "child\\\\\\\_id": "doc1\\\\\\\_sec32\\\\\\\_c2",
 
-\&#x20;     "doc\\\_id": "a3f8c2d1-...",
+\\\&#x20;     "doc\\\\\\\_id": "a3f8c2d1-...",
 
-\&#x20;     "parent\\\_id": "9f2e3a...",
+\\\&#x20;     "parent\\\\\\\_id": "9f2e3a...",
 
-\&#x20;     "section\\\_path": "第3章 > 3.2 成本结构",
+\\\&#x20;     "section\\\\\\\_path": "第3章 > 3.2 成本结构",
 
-\&#x20;     "raw\\\_content": "茅台酒成本主要由……（完整 1500 字）",
+\\\&#x20;     "raw\\\\\\\_content": "茅台酒成本主要由……（完整 1500 字）",
 
-\&#x20;     "score": 0.0328
+\\\&#x20;     "score": 0.0328
 
-\&#x20;   },
+\\\&#x20;   },
 
-\&#x20;   {
+\\\&#x20;   {
 
-\&#x20;     "child\\\_id": "doc1\\\_sec31\\\_c1",
+\\\&#x20;     "child\\\\\\\_id": "doc1\\\\\\\_sec31\\\\\\\_c1",
 
-\&#x20;     "doc\\\_id": "a3f8c2d1-...",
+\\\&#x20;     "doc\\\\\\\_id": "a3f8c2d1-...",
 
-\&#x20;     "parent\\\_id": "7c1b9d...",
+\\\&#x20;     "parent\\\\\\\_id": "7c1b9d...",
 
-\&#x20;     "section\\\_path": "第3章 > 3.1 营收构成",
+\\\&#x20;     "section\\\\\\\_path": "第3章 > 3.1 营收构成",
 
-\&#x20;     "raw\\\_content": "……",
+\\\&#x20;     "raw\\\\\\\_content": "……",
 
-\&#x20;     "score": 0.0164
+\\\&#x20;     "score": 0.0164
 
-\&#x20;   }
+\\\&#x20;   }
 
-\&#x20; ]
+\\\&#x20; ]
 
 }
 
@@ -382,7 +382,7 @@ Content-Type: multipart/form-data
 
 
 
-\*\*前端拿到 `hits` → 渲染引用卡片 → 用户点某条 → 展开 `raw\\\_content`。\*\*
+\*\*前端拿到 `hits` → 渲染引用卡片 → 用户点某条 → 展开 `raw\\\\\\\_content`。\*\*
 
 
 
@@ -459,7 +459,7 @@ ParsedDoc(text="全年营收……", page\_count=12, parser="pypdf")
 
 `AnnSearchRequest` 到底是什么
 
-> 我要在 \*\*某个字段\*\* 上，用 \*\*某个东西\*\*，按 \*\*某种度量\*\*，找 \*\*前 N 条\*\*，并且只要满足 \*\*某个条件\*\* 的。」
+> 我要在 \\\*\\\*某个字段\\\*\\\* 上，用 \\\*\\\*某个东西\\\*\\\*，按 \\\*\\\*某种度量\\\*\\\*，找 \\\*\\\*前 N 条\\\*\\\*，并且只要满足 \\\*\\\*某个条件\\\*\\\* 的。」
 
 
 
@@ -500,4 +500,44 @@ limit	这一路要几条候选	传 top\_k，两路各取 top\_k 条
 expr	标量过滤	把 user\_id == 4 下推给 Milvus，不拉全库回来再过滤
 
 
+
+
+
+三个函数连起来的完整数据流：
+
+【上传入库】
+
+PDF → parser.parse\_document → ParsedDoc
+
+&#x20;   → parser.split\_parents → list\[ParentBlock]
+
+&#x20;   → parser.split\_children → list\[ChildBlock]
+
+&#x20;   → embedding.embed\_texts(\[c.content ...]) → list\[向量]
+
+&#x20;   → 拼 rows（parent\_index 反查 parent\_id）
+
+&#x20;   → vector.insert\_children(client, rows)      ← 这个文件
+
+&#x20;   → documents.status = "indexed"
+
+
+
+【删除】
+
+用户点删 → vector.delete\_by\_doc(client, doc\_id, user\_id)   ← 这个文件
+
+&#x20;       → 删 documents / parent\_chunks（CASCADE）
+
+
+
+【检索】
+
+用户提问 → embedding.embed\_texts(\[query]) → query\_vector
+
+&#x20;       → vector.hybrid\_search(client, query\_text, query\_vector, user\_id, top\_k)   ← 这个文件
+
+&#x20;       → 去重后的父块列表
+
+&#x20;       → SearchOut(query=..., hits=\[...])
 

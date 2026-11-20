@@ -43,6 +43,8 @@ from steward.infra.milvus import close_milvus, init_milvus
 from steward.modules.knowledge.models import Document, ParentChunk
 from steward.modules.knowledge.router import router as knowledge_router
 
+from steward.modules.memory.models import Memory
+from steward.modules.memory.router import router as memory_router
 
 # 初始化日志系统
 configure_logging(settings.logging.level)
@@ -73,6 +75,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # 异步生成器对�
             RunTrace.__tablename__,
             Document.__tablename__,
             ParentChunk.__tablename__,
+            Memory.__tablename__,
         ],
     )
     async with app.state.db_engine.begin() as conn:
@@ -139,6 +142,8 @@ app.include_router(trace_router)
 app.include_router(knowledge_router)
 # 挂上RAG路由
 
+app.include_router(memory_router)
+# 挂上长期记忆路由
 
 # 测试接口
 @app.get("/health", summary="健康检查", tags=["ops"])
