@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+
 # Python 标准库，提供各种哈希算法：`md5` / `sha1` / `sha256`
 from collections.abc import Sequence
 from pathlib import Path
@@ -50,7 +51,7 @@ class KnowledgeService:
         user_id: int,
         filename: str,
         mime_type: str,
-        data: bytes,# 上传的文件二进制
+        data: bytes,  # 上传的文件二进制
     ) -> Document:
         if len(data) > MAX_UPLOAD_BYTES:
             raise DocumentTooLargeError("文件超过 20MB")
@@ -78,7 +79,6 @@ class KnowledgeService:
         target = (target_dir / f"{doc_id}{suffix}").resolve()
         target.write_bytes(data)
 
-
         # 写 PG
         # 落一条 `parsing` 记录
         doc = Document(
@@ -95,7 +95,7 @@ class KnowledgeService:
         )
         await self.repo.add_document(doc)
 
-        try:# 解析 + 切块
+        try:  # 解析 + 切块
             parsed = parse_document(target, suffix)
             parents = split_parents(parsed.text)
             children = split_children(parents)
@@ -108,9 +108,7 @@ class KnowledgeService:
             parent_rows: list[ParentChunk] = []
             # 造父块行，算确定性 ID
             for seq, parent in enumerate(parents):
-                parent_id = hashlib.sha1(
-                    f"{doc_id}{parent.section_path}{seq}".encode("utf-8")
-                ).hexdigest()[:16]
+                parent_id = hashlib.sha1(f"{doc_id}{parent.section_path}{seq}".encode("utf-8")).hexdigest()[:16]
                 parent_rows.append(
                     ParentChunk(
                         id=parent_id,
@@ -144,7 +142,6 @@ class KnowledgeService:
                 )
             inserted = insert_children(self.milvus, milvus_rows)
 
-
             # 更新状态 + commit
             doc.status = "ready"
             doc.is_indexed = True
@@ -155,7 +152,6 @@ class KnowledgeService:
             await self.session.commit()
             # `commit` 时才真正发两条 SQL：`INSERT documents` + `INSERT parent_chunks` + `UPDATE documents`
 
-
             logger.info(
                 "文档入库完成",
                 doc_id=doc_id,
@@ -164,10 +160,10 @@ class KnowledgeService:
                 parser=parsed.parser,
             )
             return doc
-#     位置	      算法	长度	    干什么
-# content_hash	sha256	64	  文件指纹，幂等去重
-# parent_id	    sha1	16	  父块确定性 ID，重新解析后仍然不变
-# child_id	    sha1	32	  子块 ID，doc_id + 序号算出来的
+        #     位置	      算法	长度	    干什么
+        # content_hash	sha256	64	  文件指纹，幂等去重
+        # parent_id	    sha1	16	  父块确定性 ID，重新解析后仍然不变
+        # child_id	    sha1	32	  子块 ID，doc_id + 序号算出来的
 
         except Exception as exc:
             await self.session.rollback()
@@ -182,7 +178,6 @@ class KnowledgeService:
                 except Exception:
                     logger.exception("清理 Milvus 残留失败", doc_id=doc_id, user_id=user_id)
 
-                    
             failed = Document(
                 id=doc_id,
                 user_id=user_id,

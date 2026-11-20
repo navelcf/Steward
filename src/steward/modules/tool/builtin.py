@@ -9,10 +9,23 @@ from steward.modules.file.service import STORAGE_ROOT
 
 from uuid import UUID, uuid4
 
+import json
+from pymilvus import MilvusClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from steward.modules.knowledge.retriever import retrieve_sources
+
 
 # 工具入参用 pydantic（方案 9.3 L1063）；Field(description=...) 会进 JSON Schema 给模型看。
 class SaveNoteArgs(BaseModel):
     content: str = Field(min_length=1, max_length=4000, description="要保存的笔记正文")
+
+
+class SearchDocsArgs(BaseModel):
+    query: str = Field(
+        min_length=1,
+        max_length=500,
+        description="检索词或问题；尽量用文档里出现的说法，别写成一句口语",
+    )
 
 
 # 笔记根目录放在 storage/ 下，复用 Day 5 已忽略的目录，不用改 .gitignore。
@@ -24,6 +37,10 @@ NOTES_ROOT = (STORAGE_ROOT / "notes").resolve()
 GET_TIME_DESC = "返回当前服务器本地时间（ISO 8601 带时区）。当用户问“现在几点”“今天几号”时调用，不要自己编时间。"
 SAVE_NOTE_DESC = (
     "把一段文字保存成 markdown 笔记文件（.md），返回保存后的相对路径。仅在用户明确说“记下来”“保存笔记”时调用。"
+)
+SEARCH_DOCS_DESC = (
+    "在用户上传的知识库文档里做混合检索（关键词 + 语义），返回相关章节的原文和引用编号。"
+    "凡是问题涉及文档内容、合同条款、资料里的数字或结论，必须先调用本工具，不要凭记忆回答。"
 )
 
 
@@ -66,6 +83,38 @@ def build_save_note(user_id: int, note_id: str | None = None) -> BaseTool:
     return save_note
 
 
+# 只读工具：默认 auto，不进审批。user_id 由闭包注入，模型看不到也传不了（防越权）。
+# 每次调用自己开 session：流式期间请求级的 session 早就关了。
+def build_search_docs(
+    user_id: int,
+    milvus: MilvusClient,
+    factory: async_sessionmaker[AsyncSession],
+) -> BaseTool:
+    @tool(description=SEARCH_DOCS_DESC, args_schema=SearchDocsArgs)
+    async def search_docs(query: str) -> str:
+        async with factory() as session:
+            sources = await retrieve_sources(session, milvus, user_id, query)
+        if not sources:
+            return json.dumps(
+                {
+                    "found": 0,
+                    "results": [],
+                    "hint": "知识库里没有找到相关内容。请如实说明资料中没有依据，不要编造。",
+                },
+                ensure_ascii=False,
+            )
+        return json.dumps(
+            {
+                "found": len(sources),
+                "results": sources,
+                "hint": "回答时在句末用 [source_id] 标注依据，例如 [ref-a3f8c2b1]；编号必须来自 results。",
+            },
+            ensure_ascii=False,
+        )
+
+    return search_docs
+
+
 # 注册表元信息与可执行对象的对应关系；key 必须和 ToolRegistry.name 一致。
 BUILTIN_META: dict[str, dict[str, str]] = {
     "get_current_time": {
@@ -79,5 +128,11 @@ BUILTIN_META: dict[str, dict[str, str]] = {
         "description": SAVE_NOTE_DESC,
         "policy": "ask",
         "risk_note": "将写入本地笔记文件",
+    },
+    "search_docs": {
+        "display_name": "文档检索",
+        "description": SEARCH_DOCS_DESC,
+        "policy": "auto",
+        "risk_note": "",
     },
 }

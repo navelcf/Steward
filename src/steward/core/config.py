@@ -66,7 +66,7 @@ class DatabaseSettings(EnvSettings):
     max_overflow: int = Field(alias="DB_MAX_OVERFLOW", default=10)  # 连接池溢出最大值
     pool_recycle: int = Field(alias="DB_POOL_RECYCLE", default=1800)  # 连接池回收时间
 
-    @computed_field# 加了 `@computed_field`，Pydantic 就把这个属性当成一个「算出来的字段」
+    @computed_field  # 加了 `@computed_field`，Pydantic 就把这个属性当成一个「算出来的字段」
     @property  # a.url 访问属性，直接取，不用括号
     def url(self) -> str:
         # 交给 SQLAlchemy 的 asyncpg 连接串。
@@ -173,6 +173,15 @@ class EmbeddingSettings(EnvSettings):
     model: str = Field(alias="EMBEDDING_MODEL", default="text-embedding-v4")
 
 
+class RagSettings(EnvSettings):
+    # 双路召回各取多少条候选（方案 7.8：默认 20，范围 10–50）。
+    top_k: int = Field(alias="RAG_TOP_K", default=20, ge=10, le=50)
+    # 最终送给模型几个父块（方案 7.8：默认 6，范围 3–10）。
+    # 注意这是「父块数」，不是「子块数」——父块动辄 2000 字，6 个已经够大。
+    final_k: int = Field(alias="RAG_FINAL_K", default=6, ge=3, le=10)
+    # dense 路的最低余弦相似度。低于它的命中直接丢掉，见 Step 3.5 —— 这是「查不到就说没有」的开关。
+    min_score: float = Field(alias="RAG_MIN_SCORE", default=0.35, ge=0.0, le=1.0)
+
 
 class Settings(BaseSettings):
     app: AppSettings = Field(default_factory=AppSettings)
@@ -182,6 +191,7 @@ class Settings(BaseSettings):
     llm: LlmSettings = Field(default_factory=LlmSettings)
     milvus: MilvusSettings = Field(default_factory=MilvusSettings)
     embedding: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
+    rag: RagSettings = Field(default_factory=RagSettings)
 
 
 settings = Settings()

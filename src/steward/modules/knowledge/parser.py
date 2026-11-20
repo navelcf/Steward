@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-import re# `re` = 正则表达式
+import re  # `re` = 正则表达式
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -28,23 +28,23 @@ CHILD_OVERLAP = 60
 HEADING = re.compile(r"^(#{1,6})\s+(.+)$")
 
 
-#`frozen=True` = 不可变
+# `frozen=True` = 不可变
 @dataclass(frozen=True)
-class ParsedDoc:# 读的产物：一篇纯文本
+class ParsedDoc:  # 读的产物：一篇纯文本
     text: str
     page_count: int | None
     parser: str
 
 
-@dataclass(frozen=True)# 切父块的产物：一节正文
+@dataclass(frozen=True)  # 切父块的产物：一节正文
 class ParentBlock:
     section_path: str
     content: str
 
 
-@dataclass(frozen=True)# 切子块的产物
+@dataclass(frozen=True)  # 切子块的产物
 class ChildBlock:
-    parent_index: int# 是整数下标，不是父块 ID
+    parent_index: int  # 是整数下标，不是父块 ID
     section_path: str
     content: str
     raw_content: str
@@ -59,6 +59,7 @@ def parse_document(path: Path, suffix: str) -> ParsedDoc:
         return _parse_docx(path)
     return _parse_plain(path)
 
+
 # `_` 开头是「模块内部函数」的约定—— 表示「别从别的模块 import 它」
 # PDF 抽不出标题，`section_path` 全叫「正文」
 # 所以以后需要mineru
@@ -66,8 +67,11 @@ def _parse_pdf(path: Path) -> ParsedDoc:
     reader = PdfReader(str(path))
     pages = [(page.extract_text() or "").strip() for page in reader.pages]
     return ParsedDoc(text="\n\n".join(pages), page_count=len(pages), parser="pypdf")
+
+
 # 逐页抽文字，页与页之间用空行 `\n\n` 拼起来
 # `.strip()`：去掉每页首尾空白
+
 
 def _parse_docx(path: Path) -> ParsedDoc:
     # docx 的标题样式能直接转成 Markdown 标题，比 PDF 干净。
@@ -78,15 +82,14 @@ def _parse_docx(path: Path) -> ParsedDoc:
         if not text:
             continue
         style = (para.style.name or "").lower()
-        if style.startswith("heading"):# 判断「这是不是标题段落」
+        if style.startswith("heading"):  # 判断「这是不是标题段落」
             digits = "".join(ch for ch in style if ch.isdigit()) or "1"
-            lines.append(f"{'#' * min(int(digits), 6)} {text}")# `"Heading 2"` → `"##"`
+            lines.append(f"{'#' * min(int(digits), 6)} {text}")  # `"Heading 2"` → `"##"`
             # Markdown 最多 6 级标题，Word 可能有「标题 9」，硬砍到 6。
             # 这也是后面 `HEADING` 正则只认 `#{1,6}` 的原因 —— 两边对齐。
         else:
             lines.append(text)
     return ParsedDoc(text="\n\n".join(lines), page_count=None, parser="python-docx")
-
 
 
 def _parse_plain(path: Path) -> ParsedDoc:
@@ -101,10 +104,10 @@ def _parse_plain(path: Path) -> ParsedDoc:
 
 # 父块：按 Markdown 标题切；没有标题就整体当一块，再按长度切。
 def split_parents(text: str) -> list[ParentBlock]:
-    blocks: list[tuple[str, str]] = []# 已完成的 (标题路径, 正文)
-    stack: list[str] = []# 标题栈
-    title = "正文"# 当前标题
-    buf: list[str] = []# 当前块的行缓冲
+    blocks: list[tuple[str, str]] = []  # 已完成的 (标题路径, 正文)
+    stack: list[str] = []  # 标题栈
+    title = "正文"  # 当前标题
+    buf: list[str] = []  # 当前块的行缓冲
 
     def flush(current_title: str, lines: list[str]) -> None:
         body = "\n".join(lines).strip()
@@ -152,9 +155,9 @@ def split_parents(text: str) -> list[ParentBlock]:
 
 
 # 子块：在父块内部递归切；content 带 section_path，raw_content 只留正文。
-_SPLITTER = RecursiveCharacterTextSplitter(# 经典切分器
-    chunk_size=CHILD_SIZE,# 每块的大小
-    chunk_overlap=CHILD_OVERLAP,# 重叠
+_SPLITTER = RecursiveCharacterTextSplitter(  # 经典切分器
+    chunk_size=CHILD_SIZE,  # 每块的大小
+    chunk_overlap=CHILD_OVERLAP,  # 重叠
     separators=["\n\n", "\n", "。", "；", " "],
     keep_separator="end",
     # 不设的话，句子结尾的标点会消失
@@ -179,9 +182,8 @@ def split_children(parents: list[ParentBlock]) -> list[ChildBlock]:
                     section_path=parent.section_path,
                     content=f"{parent.section_path}\n{piece}",
                     # 带标题，进Milvus 的 `content` 字段（进向量、进 BM25）
-                    raw_content=piece,# 不带标题
+                    raw_content=piece,  # 不带标题
                     # 只作副本，喂模型用的是 parent_chunks.content（父块全文），不是这个
-                    
                 )
             )
     return children

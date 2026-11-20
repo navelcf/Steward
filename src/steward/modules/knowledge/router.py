@@ -79,9 +79,7 @@ async def search(
     milvus: MilvusClient | None = Depends(get_milvus),
 ) -> SearchOut:
     try:
-        hits = await KnowledgeService(session, milvus).search(
-            current_user.id, body.query, body.top_k, body.doc_ids
-        )
+        hits = await KnowledgeService(session, milvus).search(current_user.id, body.query, body.top_k, body.doc_ids)
     except MilvusNotReadyError as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
     return SearchOut(query=body.query, hits=[SearchHitOut(**hit) for hit in hits])

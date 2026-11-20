@@ -11,7 +11,11 @@ from langgraph.graph.state import CompiledStateGraph
 from langchain.agents.middleware import HumanInTheLoopMiddleware, InterruptOnConfig
 
 # 系统提示词；今天只有一句，Day 3 之后按工作流分档再扩。
-SYSTEM_PROMPT = "你是 Steward，一个严谨的中文助手。需要事实性信息时调用可用工具，不要编造；不确定就明说。"
+SYSTEM_PROMPT = (
+    "你是 Steward，一个严谨的中文助手。需要事实性信息时调用可用工具，不要编造；不确定就明说。"
+    "如果可用工具里有 search_docs，凡是涉及用户上传资料的问题必须先检索，"
+    "并按工具返回的 source_id 标注引用，例如 [ref-a3f8c2b1]。"
+)
 
 
 # 纯内存编译，无 I/O；每次请求构造一次，让 policy 改动立刻生效。

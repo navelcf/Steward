@@ -39,15 +39,14 @@ class SearchIn(BaseModel):
     # `[]`（空列表）限定了「零份文档」→ 结果必然是空
 
 
-
 # 检索命中；一条对应一个父块。
 class SearchHitOut(BaseModel):
-    child_id: str# 调试 / 溯源知道是哪一小段命中的
-    doc_id: str# 前端显示「出自《茅台年报》」
-    parent_id: str# 内部 / 前端去重键、跳转锚点
-    section_path: str# `section_path`前端显示「第 3.2 节 成本结构」
-    raw_content: str# 模型拼进 prompt 的那段 1500 字
-    score: float # `score`前端 / 调试排序、展示置信度
+    child_id: str  # 调试 / 溯源知道是哪一小段命中的
+    doc_id: str  # 前端显示「出自《茅台年报》」
+    parent_id: str  # 内部 / 前端去重键、跳转锚点
+    section_path: str  # `section_path`前端显示「第 3.2 节 成本结构」
+    raw_content: str  # 模型拼进 prompt 的那段 1500 字
+    score: float  # `score`前端 / 调试排序、展示置信度
     # `score` 是 RRF 融合后的分数，大概在 `0.01 ~ 0.05` 之间。
     # 它不是：- 余弦相似度（0~1）- 百分比- 归一化
     # 它只能用来「比大小、排序」，绝对值不可解释。

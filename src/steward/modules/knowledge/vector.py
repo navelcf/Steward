@@ -52,7 +52,12 @@ def hybrid_search(
         #  Milvus 支持 `and` / `or` / `in` / `like`
 
     dense_req = AnnSearchRequest(
-        [query_vector], "dense", {"metric_type": "COSINE"}, limit=top_k, expr=expr
+        # radius：余弦相似度低于它的命中直接丢弃，这就是「查不到」能真的为空的原因。
+        [query_vector],
+        "dense",
+        {"metric_type": "COSINE", "params": {"radius": settings.rag.min_score}},
+        limit=top_k,
+        expr=expr,
         # `data`要搜的东西稠密传 `[向量]`，稀疏传 `[文本]`
         # [query_vector]       # 而不是 query_vector
         # 因为 Milvus 支持「一次搜多个查询」：
@@ -63,14 +68,14 @@ def hybrid_search(
         # `limit`这一路要几条候选传 `top_k`，两路各取 top_k 条
         # 把 `user_id == 4` 下推给 Milvus，不拉全库回来再过滤
     )
-    sparse_req = AnnSearchRequest(# 稀疏向量传 [文本]，milvus自动给你算好了
+    sparse_req = AnnSearchRequest(  # 稀疏向量传 [文本]，milvus自动给你算好了
         [query_text], "sparse", {"metric_type": "BM25"}, limit=top_k, expr=expr
     )
     hits = client.hybrid_search(
         collection_name=settings.milvus.collection,
         reqs=[dense_req, sparse_req],
         ranker=RRFRanker(60),
-        limit=top_k,# 这里的 limit 是两路检索结果合起来之后再取 top_k
+        limit=top_k,  # 这里的 limit 是两路检索结果合起来之后再取 top_k
         output_fields=["child_id", "doc_id", "parent_id", "section_path", "raw_content"],
     )[0]
     # # 为什么是 `[0]`
@@ -89,9 +94,6 @@ def hybrid_search(
     #     },
     # }
 
-
-
-
     # 假设 `hits`（已经按融合分降序）是：
     # 同一父块的多个子块只留最高分那条，顺序按融合分数。
     # P1（分 0.033）  ← 高粱子块
@@ -100,8 +102,8 @@ def hybrid_search(
     # P3（分 0.020）  ← 产量总体子块
     # P1（分 0.015）  ← 原材料子块
 
-    seen: set[str] = set()# 集合，O(1)，哈希直查
-    results: list[dict] = []# 结果列表
+    seen: set[str] = set()  # 集合，O(1)，哈希直查
+    results: list[dict] = []  # 结果列表
     for hit in hits:
         entity = hit["entity"]
         parent_id = entity["parent_id"]

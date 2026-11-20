@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import FastAPI,Request
+from fastapi import FastAPI, Request
 from pymilvus import DataType, Function, FunctionType, MilvusClient
 
 from steward.core.config import settings
@@ -30,14 +30,13 @@ def ensure_collection(client: MilvusClient) -> None:
     # `section_path`在文档哪一节（「第 3.2 节」）。引用时能标到章节
     # `section_path` 具体长什么样，取决于切分器怎么填。比如 `"# 公司概况 > ## 主营业务 > ### 成本结构"`
 
-
     # content 开中文分词：BM25 的稀疏向量由它自动生成，不用自己算。
     schema.add_field(
         "content",
         DataType.VARCHAR,
         max_length=4096,
-        enable_analyzer=True,# 允许分词
-        analyzer_params={"type": "chinese"},# # 指定分词方式，这里选择中文分词
+        enable_analyzer=True,  # 允许分词
+        analyzer_params={"type": "chinese"},  # # 指定分词方式，这里选择中文分词
     )
     schema.add_field("raw_content", DataType.VARCHAR, max_length=4096)
     # 切块
@@ -60,7 +59,7 @@ def ensure_collection(client: MilvusClient) -> None:
     )
 
     index_params = client.prepare_index_params()
-    index_params.add_index("dense", index_type="AUTOINDEX", metric_type="COSINE")#相似度计算
+    index_params.add_index("dense", index_type="AUTOINDEX", metric_type="COSINE")  # 相似度计算
     index_params.add_index("sparse", index_type="SPARSE_INVERTED_INDEX", metric_type="BM25")
     # 稀疏向量，采用倒排索引， # 相似度计算方式，支持 BM25、IP
     client.create_collection(collection_name=name, schema=schema, index_params=index_params)

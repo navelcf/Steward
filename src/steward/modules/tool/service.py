@@ -6,11 +6,21 @@ from langchain_core.tools import BaseTool
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from steward.core.logging import get_logger
-from steward.modules.tool.builtin import BUILTIN_META, SaveNoteArgs, build_save_note, get_current_time
+from steward.modules.tool.builtin import (
+    BUILTIN_META,
+    SaveNoteArgs,
+    build_save_note,
+    get_current_time,
+    SearchDocsArgs,
+    build_search_docs,
+)
 from steward.modules.tool.models import ToolRegistry
 from steward.modules.tool.repository import ToolRepository
 
 from langchain.agents.middleware import InterruptOnConfig
+
+from pymilvus import MilvusClient
+from steward.modules.knowledge.repository import KnowledgeRepository
 
 logger = get_logger(__name__)
 
@@ -21,6 +31,8 @@ def tool_param_schema(name: str) -> dict:
         return SaveNoteArgs.model_json_schema()
     if name == "get_current_time":
         return get_current_time.args_schema.model_json_schema()
+    if name == "search_docs":
+        return SearchDocsArgs.model_json_schema()
     raise KeyError(f"未登记的内置工具: {name}")
 
 
@@ -60,7 +72,12 @@ async def load_toolset(
     session: AsyncSession,
     user_id: int,
     note_id: str | None = None,
+    *,
+    factory: async_sessionmaker[AsyncSession],
+    milvus: MilvusClient,
 ) -> tuple[list[BaseTool], dict[str, bool | InterruptOnConfig]]:
+    # 一个可用文档都没有就不装配检索工具：否则模型白调一轮，还多花一次 LLM。
+    has_docs = await KnowledgeRepository(session).count_ready(user_id) > 0
     rows: Sequence[ToolRegistry] = await ToolRepository(session).list_all()
     tools: list[BaseTool] = []
     interrupt_on: dict[str, bool | InterruptOnConfig] = {}
@@ -78,6 +95,10 @@ async def load_toolset(
             tools.append(get_current_time)
         elif row.name == "save_note":
             tools.append(build_save_note(user_id, note_id))  # 这个和上面那个不一样，这个出来的就是一个basetool类
+        elif row.name == "search_docs":
+            if milvus is None or factory is None or not has_docs:
+                continue
+            tools.append(build_search_docs(user_id, milvus, factory))
         else:
             logger.warning("注册表里有未知工具，跳过", tool=row.name)
             continue

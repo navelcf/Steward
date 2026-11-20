@@ -139,6 +139,7 @@ app.include_router(trace_router)
 app.include_router(knowledge_router)
 # 挂上RAG路由
 
+
 # 测试接口
 @app.get("/health", summary="健康检查", tags=["ops"])
 async def health() -> dict[str, str]:

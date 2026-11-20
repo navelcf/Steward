@@ -35,6 +35,8 @@ from sqlalchemy import select
 from steward.modules.trace.repository import TraceRepository
 from steward.modules.trace.service import TraceCollector
 
+import json
+
 logger = get_logger(__name__)
 
 
@@ -168,9 +170,18 @@ async def event_stream(
     # 段 2：流式调 Agent，这段时间不持有任何数据库连接。
     # 段 2：流式调 Agent，这段时间不持有任何数据库连接。
     buffer: list[str] = []
+    # 本轮引用：模型可能调多次检索，按 source_id 去重后累积。
+    sources: list[dict] = []
+    seen_refs: set[str] = set()
     try:
         async with factory() as session:
-            tools, interrupt_on = await load_toolset(session, user_id, note_id)
+            tools, interrupt_on = await load_toolset(
+                session,
+                user_id,
+                note_id,
+                milvus=getattr(request.app.state, "milvus", None),
+                factory=factory,
+            )
         agent = build_agent(
             request.app.state.chat_model,
             tools,
@@ -257,6 +268,7 @@ async def event_stream(
                 name = remembered[0] if remembered else event.get("name", "")
                 args = remembered[1] if remembered else None
                 output = event["data"].get("output")
+                content = getattr(output, "content", output)
                 collector.add(
                     kind="tool",
                     name=name,
@@ -264,6 +276,19 @@ async def event_stream(
                     output_data=getattr(output, "content", output),
                     latency_ms=collector.end(key),
                 )
+                # 检索工具的返回值是 JSON；把 sources 收进口袋，最后随 additional_info 推给前端。
+                # 解析失败只丢引用、不影响回答，所以只记日志不抛。
+                if name == "search_docs" and isinstance(content, str):
+                    try:
+                        payload = json.loads(content)
+                    except json.JSONDecodeError:
+                        logger.exception("检索结果不是合法 JSON", thread_id=thread_id)
+                    else:
+                        for item in payload.get("results") or []:
+                            ref = item.get("source_id")
+                            if ref and ref not in seen_refs:
+                                seen_refs.add(ref)
+                                sources.append(item)
                 continue
     except Exception:
         logger.exception("Agent 流式生成失败", user_id=user_id)
@@ -336,18 +361,22 @@ async def event_stream(
         return
 
     # 段 3：只有成功走完整个流，才把完整回答落库（API 契约，不是给模型看的）。
+    message_id: int | None = None
     try:
         async with factory() as session:
-            await MessageRepository(session).add(
-                Message(
-                    thread_id=thread_id,
-                    user_id=user_id,
-                    role="assistant",
-                    content="".join(buffer),
-                    run_id=run_id,
-                )
+            row = Message(
+                thread_id=thread_id,
+                user_id=user_id,
+                role="assistant",
+                content="".join(buffer),
+                run_id=run_id,
+                # 没有引用就存 NULL，不存空列表：前端判空只需一种写法。
+                sources=sources or None,
             )
+            await MessageRepository(session).add(row)
             await session.commit()
+            # expire_on_commit=False，commit 之后还能读 id。
+            message_id = row.id
     except Exception:
         logger.exception("回答落库失败", user_id=user_id, thread_id=thread_id)
         yield _sse("error", {"message": "回答保存失败"})
@@ -355,7 +384,10 @@ async def event_stream(
         await collector.flush(factory)
         return
 
-    yield _sse("done", {"ok": True})
+    # 引用单独一个事件（方案 5.5 的事件顺序：message* -> additional_info -> done）。
+    if sources:
+        yield _sse("additional_info", {"sources": sources})
+    yield _sse("done", {"ok": True, "run_id": run_id, "message_id": message_id, "sources": len(sources)})
     await collector.flush(factory)
 
 
