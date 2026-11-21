@@ -48,6 +48,8 @@ from steward.modules.memory.router import router as memory_router
 
 from steward.modules.eval.models import EvalCaseResult, EvalRun
 
+from fastapi.middleware.cors import CORSMiddleware
+
 # 初始化日志系统
 configure_logging(settings.logging.level)
 logger = get_logger(__name__)
@@ -116,6 +118,20 @@ app = FastAPI(
     version="0.1.0",
     debug=settings.app.debug,
     lifespan=lifespan,
+    docs_url="/docs-Navelcf25",
+    redoc_url=None,
+    openapi_url="/openapi-Navelcf25.json"
+)
+
+# 前端 localhost:3000 要跨域调 8001；Bearer token 走 header，不用 cookie，所以不开 credentials。
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.app.cors_origin_list,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    # SSE 不需要额外暴露 header，但加上无害，方便以后读 X-Request-Id。
+    expose_headers=["*"],
 )
 
 # router 自带 prefix，这里不要再传 prefix

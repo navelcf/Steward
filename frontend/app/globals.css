@@ -1,0 +1,461 @@
+@import "tailwindcss";
+
+/* 暗色走 class 开关（ThemeToggle 改 <html class="dark">），不用系统媒体查询自动切。 */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ============ 主题 token：亮色 + 石墨灰 ============ */
+/* 只在这里定义颜色；组件里一律用 bg-background / text-muted-foreground 这类语义类。 */
+:root {
+    --radius: 0.75rem;
+
+    --background: oklch(0.985 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0 0);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.145 0 0);
+    --primary: oklch(0.205 0 0);
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.965 0 0);
+    --secondary-foreground: oklch(0.205 0 0);
+    --muted: oklch(0.965 0 0);
+    --muted-foreground: oklch(0.52 0 0);
+    --accent: oklch(0.955 0 0);
+    --accent-foreground: oklch(0.205 0 0);
+    --destructive: oklch(0.577 0.245 27.325);
+    --destructive-foreground: oklch(0.985 0 0);
+    --border: oklch(0.915 0 0);
+    --input: oklch(0.915 0 0);
+    --ring: oklch(0.7 0 0);
+    --sidebar: oklch(0.972 0 0);
+    --sidebar-border: oklch(0.915 0 0);
+
+    /* 品牌墙固定石墨黑：不随亮暗主题翻转，登录页左右两边才稳。 */
+    --brand: oklch(0.205 0 0);
+    --brand-foreground: oklch(0.985 0 0);
+
+    /* 状态色：等待人工=琥珀，运行中=蓝，成功=绿（Beautiful UI 的语义约定）。 */
+    --waiting: oklch(0.76 0.145 72);
+    --waiting-foreground: oklch(0.42 0.1 70);
+    --running: oklch(0.6 0.13 250);
+    --running-foreground: oklch(0.42 0.12 250);
+    --success: oklch(0.62 0.12 150);
+}
+
+.dark {
+    --background: oklch(0.165 0 0);
+    --foreground: oklch(0.96 0 0);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.96 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.96 0 0);
+    --primary: oklch(0.93 0 0);
+    --primary-foreground: oklch(0.2 0 0);
+    --secondary: oklch(0.26 0 0);
+    --secondary-foreground: oklch(0.96 0 0);
+    --muted: oklch(0.25 0 0);
+    --muted-foreground: oklch(0.7 0 0);
+    --accent: oklch(0.275 0 0);
+    --accent-foreground: oklch(0.96 0 0);
+    --destructive: oklch(0.68 0.19 25);
+    --destructive-foreground: oklch(0.15 0 0);
+    --border: oklch(0.31 0 0);
+    --input: oklch(0.31 0 0);
+    --ring: oklch(0.55 0 0);
+    --sidebar: oklch(0.185 0 0);
+    --sidebar-border: oklch(0.28 0 0);
+
+    /* 暗色下品牌墙保持同一块石墨，避免登录页变成「左白右黑」。 */
+    --brand: oklch(0.205 0 0);
+    --brand-foreground: oklch(0.985 0 0);
+
+    --waiting: oklch(0.78 0.145 72);
+    --waiting-foreground: oklch(0.86 0.1 75);
+    --running: oklch(0.7 0.13 250);
+    --running-foreground: oklch(0.82 0.1 250);
+    --success: oklch(0.72 0.13 150);
+}
+
+/* ============ 把 CSS 变量注册成 Tailwind 工具类 ============ */
+@theme inline {
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+    --color-sidebar: var(--sidebar);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-brand: var(--brand);
+    --color-brand-foreground: var(--brand-foreground);
+    --color-waiting: var(--waiting);
+    --color-waiting-foreground: var(--waiting-foreground);
+    --color-running: var(--running);
+    --color-running-foreground: var(--running-foreground);
+    --color-success: var(--success);
+
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+
+    --font-sans: var(--font-geist-sans), "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    --font-mono: var(--font-geist-mono), "SFMono-Regular", Consolas, monospace;
+}
+
+@layer base {
+    * {
+        border-color: var(--color-border);
+    }
+
+    html {
+        -webkit-text-size-adjust: 100%;
+    }
+
+    body {
+        background-color: var(--color-background);
+        color: var(--color-foreground);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+    }
+
+    ::selection {
+        background-color: oklch(0.205 0 0 / 12%);
+    }
+
+    .dark ::selection {
+        background-color: oklch(0.98 0 0 / 18%);
+    }
+
+    :focus-visible {
+        outline: 2px solid var(--color-ring);
+        outline-offset: 2px;
+    }
+}
+
+/* ============ 动效：全部尊重 prefers-reduced-motion ============ */
+
+/* 流式光标：呼吸的实心块，比闪烁竖线稳。 */
+@keyframes caret-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.15; }
+}
+
+.stream-caret::after {
+    content: "";
+    display: inline-block;
+    width: 0.45em;
+    height: 1em;
+    margin-left: 3px;
+    vertical-align: -0.12em;
+    border-radius: 1px;
+    background-color: currentColor;
+    animation: caret-pulse 1.1s ease-in-out infinite;
+}
+
+/* 骨架屏：横向扫光。 */
+@keyframes shimmer {
+    100% { transform: translateX(100%); }
+}
+
+.skeleton {
+    position: relative;
+    overflow: hidden;
+    background-color: var(--color-muted);
+}
+
+.skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background-image: linear-gradient(
+        90deg,
+        transparent,
+        oklch(1 0 0 / 55%),
+        transparent
+    );
+    animation: shimmer 1.7s infinite;
+}
+
+.dark .skeleton::after {
+    background-image: linear-gradient(
+        90deg,
+        transparent,
+        oklch(1 0 0 / 8%),
+        transparent
+    );
+}
+
+/* 等待审批：琥珀色边框呼吸，不能让人错过。 */
+@keyframes approval-breathe {
+    0%, 100% {
+        box-shadow: 0 0 0 0 oklch(0.76 0.145 72 / 0%);
+        border-color: oklch(0.76 0.145 72 / 45%);
+    }
+    50% {
+        box-shadow: 0 0 0 5px oklch(0.76 0.145 72 / 12%);
+        border-color: oklch(0.76 0.145 72 / 85%);
+    }
+}
+
+.approval-breathe {
+    animation: approval-breathe 2.4s ease-in-out infinite;
+}
+
+/* 思考中：三个点错开弹跳。 */
+@keyframes dot-bounce {
+    0%, 80%, 100% { transform: translateY(0); opacity: 0.35; }
+    40% { transform: translateY(-3px); opacity: 1; }
+}
+
+.thinking-dot {
+    animation: dot-bounce 1.2s ease-in-out infinite;
+}
+
+.thinking-dot:nth-child(2) { animation-delay: 0.15s; }
+.thinking-dot:nth-child(3) { animation-delay: 0.3s; }
+
+/* 消息入场：轻微上浮，不做花哨位移。 */
+@keyframes fade-up {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-up {
+    animation: fade-up 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* 文本扫光：只在「等待审批 / 检索中」这种状态词上用。 */
+@keyframes text-sheen {
+    from { background-position: 200% center; }
+    to { background-position: -200% center; }
+}
+
+.sheen {
+    background-image: linear-gradient(
+        90deg,
+        var(--color-muted-foreground) 0%,
+        var(--color-foreground) 45%,
+        var(--color-muted-foreground) 90%
+    );
+    background-size: 200% auto;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    animation: text-sheen 2.8s linear infinite;
+}
+
+/* ============ 小工具类 ============ */
+
+.glass {
+    background-color: color-mix(in oklab, var(--color-background) 78%, transparent);
+    backdrop-filter: blur(14px) saturate(160%);
+}
+
+/* 点状画布：Beautiful UI 的空态背景。 */
+.dot-grid {
+    background-image: radial-gradient(
+        circle,
+        color-mix(in oklab, var(--color-foreground) 12%, transparent) 1px,
+        transparent 1px
+    );
+    background-size: 18px 18px;
+}
+
+/* 深色品牌墙上的点阵：用白点，不跟随主题。 */
+.dot-grid-light {
+    background-image: radial-gradient(circle, oklch(1 0 0 / 16%) 1px, transparent 1px);
+    background-size: 18px 18px;
+}
+
+/* 细滚动条：对话区和侧栏都不想让滚动条抢戏。 */
+.scroll-slim {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--color-foreground) 18%, transparent) transparent;
+}
+
+.scroll-slim::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.scroll-slim::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background-color: color-mix(in oklab, var(--color-foreground) 16%, transparent);
+}
+
+.scroll-slim::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* ============ markdown 正文 ============ */
+.md-body {
+    font-size: 0.925rem;
+    line-height: 1.75;
+    overflow-wrap: anywhere;
+}
+
+.md-body > * + * {
+    margin-top: 0.7em;
+}
+
+.md-body h1,
+.md-body h2,
+.md-body h3,
+.md-body h4 {
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.35;
+    margin-top: 1.1em;
+}
+
+.md-body h1 { font-size: 1.18rem; }
+.md-body h2 { font-size: 1.08rem; }
+.md-body h3 { font-size: 1rem; }
+.md-body h4 { font-size: 0.95rem; }
+
+.md-body ul,
+.md-body ol {
+    padding-left: 1.35em;
+}
+
+.md-body ul { list-style: disc; }
+.md-body ol { list-style: decimal; }
+
+.md-body li + li {
+    margin-top: 0.3em;
+}
+
+.md-body li::marker {
+    color: var(--color-muted-foreground);
+}
+
+.md-body code {
+    border-radius: 0.35rem;
+    background-color: var(--color-muted);
+    padding: 0.12em 0.38em;
+    font-family: var(--font-mono);
+    font-size: 0.86em;
+}
+
+.md-body pre {
+    overflow-x: auto;
+    border-radius: 0.7rem;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-muted);
+    padding: 0.85rem 1rem;
+    font-size: 0.84rem;
+    line-height: 1.6;
+}
+
+.md-body pre code {
+    background: none;
+    padding: 0;
+    font-size: inherit;
+}
+
+.md-body table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88em;
+}
+
+.md-body th,
+.md-body td {
+    border: 1px solid var(--color-border);
+    padding: 0.4rem 0.65rem;
+    text-align: left;
+    vertical-align: top;
+}
+
+.md-body th {
+    background-color: var(--color-muted);
+    font-weight: 600;
+}
+
+.md-body a {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-color: color-mix(in oklab, var(--color-foreground) 35%, transparent);
+}
+
+.md-body a:hover {
+    text-decoration-color: var(--color-foreground);
+}
+
+.md-body blockquote {
+    border-left: 2px solid var(--color-border);
+    padding-left: 0.85rem;
+    color: var(--color-muted-foreground);
+}
+
+.md-body hr {
+    border: 0;
+    border-top: 1px solid var(--color-border);
+    margin: 1.2em 0;
+}
+
+/* 行内引用芯片：正文里的 [1] 变成可点的小方块。 */
+.cite-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.15rem;
+    height: 1.15rem;
+    margin: 0 0.1rem;
+    border-radius: 0.35rem;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-muted);
+    color: var(--color-muted-foreground);
+    font-size: 0.68rem;
+    font-weight: 600;
+    line-height: 1;
+    vertical-align: 0.15em;
+    transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.cite-chip:hover {
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
+    color: var(--color-primary-foreground);
+}
+
+.cite-chip[data-active="true"] {
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
+    color: var(--color-primary-foreground);
+}
+
+/* ============ 减少动效 ============ */
+@media (prefers-reduced-motion: reduce) {
+    .stream-caret::after,
+    .skeleton::after,
+    .approval-breathe,
+    .thinking-dot,
+    .fade-up,
+    .sheen {
+        animation: none;
+    }
+
+    *,
+    *::before,
+    *::after {
+        transition-duration: 0.01ms !important;
+    }
+}

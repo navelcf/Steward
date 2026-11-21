@@ -53,6 +53,16 @@ class AppSettings(EnvSettings):
     host: str = Field(alias="APP_HOST", default="127.0.0.1")
     port: int = Field(alias="APP_PORT", default=8001)
     debug: bool = Field(alias="APP_DEBUG", default=True)
+    # 允许跨域的前端地址，逗号分隔；dev 用 3100（3000 被 Attu 占了）。
+    cors_origins: str = Field(
+        alias="CORS_ORIGINS",
+        default="http://localhost:3100,http://127.0.0.1:3100",
+    )
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        # 逗号分隔转列表；顺手去掉空白项，避免 "a,,b" 这种脏值。
+        return [item.strip() for item in self.cors_origins.split(",") if item.strip()]
 
 
 class DatabaseSettings(EnvSettings):
