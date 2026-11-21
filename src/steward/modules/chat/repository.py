@@ -34,7 +34,6 @@ class MessageRepository:
         # SELECT count(*) FROM messages WHERE messages.thread_id = ? AND messages.user_id = ?
         return await self.session.scalar(stmt) or 0
 
-
     # 这个会话里某个角色有几条；用来判断「是不是新会话首轮」。
     async def count_by_role(self, thread_id: str, user_id: int, role: str) -> int:
         stmt = (

@@ -1,0 +1,15 @@
+{"id":"q001","question":"星云科技去年赚了多少钱","doc_hint":null,"case_type":"colloquial","expected_sections":["2.1 营收与利润"],"expected_keywords":["45.6 亿","8.2 亿"],"is_answerable":true}
+{"id":"q002","question":"这家公司主要是靠什么赚钱的","doc_hint":null,"case_type":"colloquial","expected_sections":["1.2 主营业务"],"expected_keywords":["AI 云平台","收入占比"],"is_answerable":true}
+{"id":"q003","question":"经营活动产生的现金流量净额是多少","doc_hint":null,"case_type":"term","expected_sections":["2.2 现金流状况"],"expected_keywords":["7.4 亿","现金流"],"is_answerable":true}
+{"id":"q004","question":"归母净利润的同比增速","doc_hint":null,"case_type":"term","expected_sections":["2.1 营收与利润"],"expected_keywords":["35.1%","净利润"],"is_answerable":true}
+{"id":"q005","question":"2.1 节营收与利润主要讲了什么","case_type":"clause_no","expected_sections":["2.1 营收与利润"],"expected_keywords":["营业总收入"],"is_answerable":true}
+{"id":"q006","question":"第四部分风险提示里都提了哪些风险","doc_hint":null,"case_type":"clause_no","expected_sections":["4.1 政策风险","4.2 经营风险"],"expected_keywords":["政策","经营风险"],"is_answerable":true}
+{"id":"q007","question":"前五大客户收入占比多少","doc_hint":null,"case_type":"term","expected_sections":["4.2 经营风险"],"expected_keywords":["35%","前五大客户"],"is_answerable":true}
+{"id":"q008","question":"茅台这份研报的核心结论是什么","doc_hint":null,"case_type":"compare","expected_sections":["正文"],"expected_keywords":["优于大市","2026Q1"],"is_answerable":true}
+{"id":"q009","question":"茅台 2026 一季度收入表现如何","doc_hint":null,"case_type":"condition","expected_sections":["正文"],"expected_keywords":["收入稳健增长","2026Q1"],"is_answerable":true}
+{"id":"q010","question":"两份文档分别讲的是哪家公司","doc_hint":null,"case_type":"compare","expected_sections":["1.1 公司简介","正文"],"expected_keywords":["星云科技","茅台"],"is_answerable":true}
+{"id":"q011","question":"量子纠缠的原理是什么","doc_hint":null,"case_type":"unanswerable","expected_sections":[],"expected_keywords":[],"is_answerable":false}
+{"id":"q012","question":"糖尿病人能吃西瓜吗","case_type":"unanswerable","expected_sections":[],"expected_keywords":[],"is_answerable":false}
+
+
+

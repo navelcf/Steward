@@ -15,6 +15,9 @@ from docx import Document as DocxDocument
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pypdf import PdfReader
 
+from functools import lru_cache
+
+
 # 父块上限：超过就按段落再切，section_path 加 (续N)（方案 7.3 L870）。
 MAX_PARENT_CHARS = 3000
 # 子块参数照方案 7.3 L876。
@@ -155,24 +158,32 @@ def split_parents(text: str) -> list[ParentBlock]:
 
 
 # 子块：在父块内部递归切；content 带 section_path，raw_content 只留正文。
-_SPLITTER = RecursiveCharacterTextSplitter(  # 经典切分器
-    chunk_size=CHILD_SIZE,  # 每块的大小
-    chunk_overlap=CHILD_OVERLAP,  # 重叠
-    separators=["\n\n", "\n", "。", "；", " "],
-    keep_separator="end",
-    # 不设的话，句子结尾的标点会消失
-)
-# 1. 先试着用 `\n\n`（段落）切
-# 2. 切出来的某块还是超 400 → 对这块改用 `\n`（换行）切
-# 3. 还超 → 改用 `。`（句号）
-# 4. 还超 → `；`（分号)
-# 5. 还超 → ` `（空格硬切）
+@lru_cache(maxsize=8)  # 按参数缓存，评测时反复换参数不会反复建对象。
+def _splitter(chunk_size: int, chunk_overlap: int) -> RecursiveCharacterTextSplitter:
+    # 经典切分器；按参数缓存，评测时反复换参数不会反复建对象。
+    # 1. 先试着用 `\n\n`（段落）切
+    # 2. 切出来某块还超 → 改用 `\n`（换行）切
+    # 3. 还超 → 改用 `。`（句号）
+    # 4. 还超 → `；`（分号）
+    # 5. 还超 → ` `（空格硬切）
+    # 不设 keep_separator 的话，句子结尾的标点会消失。
+    return RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        separators=["\n\n", "\n", "。", "；", " "],
+        keep_separator="end",
+    )
 
 
-def split_children(parents: list[ParentBlock]) -> list[ChildBlock]:
+def split_children(
+    parents: list[ParentBlock],
+    chunk_size: int = CHILD_SIZE,
+    chunk_overlap: int = CHILD_OVERLAP,
+) -> list[ChildBlock]:
     children: list[ChildBlock] = []
+    splitter = _splitter(chunk_size, chunk_overlap)
     for index, parent in enumerate(parents):
-        for piece in _SPLITTER.split_text(parent.content):
+        for piece in splitter.split_text(parent.content):
             piece = piece.strip()
             if not piece:
                 continue

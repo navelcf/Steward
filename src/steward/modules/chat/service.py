@@ -92,7 +92,12 @@ def resolve_document(file_id: str, user_id: int) -> Path:
 
 # 组装本轮消息：可选文档全文 + 当前问题；资料明确标注「不是指令」。
 # 历史不再由这里拼：Agent 会自动把本轮消息与 Checkpointer 的状态合并。
-def build_message(message: str, file_id: str | None, user_id: int,memories: list[str] | None = None,) -> str:
+def build_message(
+    message: str,
+    file_id: str | None,
+    user_id: int,
+    memories: list[str] | None = None,
+) -> str:
     sections: list[str] = []
     # 跨会话记忆放在最前面：它是背景，不该压过本轮问题。
     if memories:
@@ -165,7 +170,6 @@ async def event_stream(
             logger.exception("记忆召回失败，按无记忆处理", user_id=user_id)
         if memories:
             logger.info("召回记忆", count=len(memories), user_id=user_id)
-
 
     # 段 1：落 user 消息 -> commit，然后立刻释放连接。
     # 归属校验已挪到 deps.get_owned_thread（依赖层），这里不再重复查。
@@ -411,7 +415,6 @@ async def event_stream(
         await collector.flush(factory)
         return
 
-
     # 后台抽取记忆：调 LLM 要 1-2 秒，不能挡着 done 返回。
     # 必须保住引用，否则任务可能在跑完前被 GC（官方文档的标准写法）。
     if resume is None and buffer:
@@ -422,7 +425,7 @@ async def event_stream(
                 user_id,
                 run_id,
                 message,
-                answer,
+                answer="".join(buffer),
             )
         )
         _background_tasks.add(task)
@@ -431,9 +434,6 @@ async def event_stream(
         # discard：`set` 的方法。从集合里删掉传入的那个元素
         # _background_tasks.discard        # ← bound method 对象，"把这个函数本身"当值传
         # _background_tasks.discard(task)  # ← 立即调用，返回 None
-
-
-
 
     # 引用单独一个事件（方案 5.5 的事件顺序：message* -> additional_info -> done）。
     if sources:

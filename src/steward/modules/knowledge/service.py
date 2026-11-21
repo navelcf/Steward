@@ -210,6 +210,85 @@ class KnowledgeService:
         await self.session.commit()
         return True
 
+
+    # 用新的切分参数重建一份文档的索引；评测要对比不同 chunk_size 就靠它。
+    # 只重建 chunks，不动 documents 那一行（文件本身没变）。
+    async def reindex(
+        self,
+        doc_id: str,
+        user_id: int,
+        chunk_size: int,
+        chunk_overlap: int,
+    ) -> int:
+        if self.milvus is None:
+            raise MilvusNotReadyError("Milvus 未就绪")
+
+        doc = await self.repo.get_document(doc_id, user_id)
+        if doc is None:
+            raise UnsupportedFormatError("文档不存在")
+
+        path = Path(doc.storage_path)
+        suffix = path.suffix.lower()
+        parsed = parse_document(path, suffix)
+        parents = split_parents(parsed.text)
+        children = split_children(parents, chunk_size, chunk_overlap)
+        if not children:
+            raise UnsupportedFormatError("重建后没有可用文本")
+
+        # 先删旧的：Milvus 子块 + PG 父块。删完再写，避免新旧混在一起。
+        delete_by_doc(self.milvus, doc_id, user_id)
+        await self.repo.delete_parents(doc_id, user_id)
+
+        vectors = embed_texts([child.content for child in children])
+
+        parent_rows: list[ParentChunk] = []
+        for seq, parent in enumerate(parents):
+            parent_id = hashlib.sha1(
+                f"{doc_id}{parent.section_path}{seq}".encode("utf-8")
+            ).hexdigest()[:16]
+            parent_rows.append(
+                ParentChunk(
+                    id=parent_id,
+                    doc_id=doc_id,
+                    user_id=user_id,
+                    section_path=parent.section_path,
+                    content=parent.content,
+                    char_count=len(parent.content),
+                    seq=seq,
+                )
+            )
+        await self.repo.add_parents(parent_rows)
+
+        rows = []
+        for index, child in enumerate(children):
+            rows.append(
+                {
+                    "child_id": hashlib.sha1(f"{doc_id}{chunk_size}{index}".encode("utf-8")).hexdigest()[:32],
+                    "doc_id": doc_id,
+                    "parent_id": parent_rows[child.parent_index].id,
+                    "user_id": user_id,
+                    "section_path": child.section_path,
+                    "content": child.content,
+                    "raw_content": child.raw_content,
+                    "dense": vectors[index],
+                }
+            )
+        inserted = insert_children(self.milvus, rows)
+
+        doc.char_count = len(parsed.text)
+        doc.token_estimate = int(len(parsed.text) * TOKEN_FACTOR)
+        await self.session.commit()
+        logger.info(
+            "索引已重建",
+            doc_id=doc_id,
+            chunk_size=chunk_size,
+            parents=len(parent_rows),
+            children=inserted,
+        )
+        return inserted
+
+
+
     # 检索：query 向量化 -> 混合检索 -> 返回父块级结果。
     async def search(
         self,

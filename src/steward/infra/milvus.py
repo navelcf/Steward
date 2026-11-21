@@ -98,3 +98,7 @@ def close_milvus(app: FastAPI) -> None:
 # FastAPI 依赖：取 lifespan 建好的客户端；没成功就是 None，由调用方转 503。
 def get_milvus(request: Request) -> MilvusClient | None:
     return getattr(request.app.state, "milvus", None)
+
+# 脚本里用（没有 FastAPI app）；连不上直接抛，让调用方决定怎么处理。
+def get_milvus_client():
+    return MilvusClient(uri=settings.milvus.uri, timeout=5)

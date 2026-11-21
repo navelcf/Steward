@@ -44,10 +44,5 @@ class MemoryRepository:
 
     # 列出来给 GET /memories 和调试用；时间倒序。
     async def list_all(self, user_id: int, limit: int) -> Sequence[Memory]:
-        stmt = (
-            select(Memory)
-            .where(Memory.user_id == user_id)
-            .order_by(Memory.created_at.desc())
-            .limit(limit)
-        )
+        stmt = select(Memory).where(Memory.user_id == user_id).order_by(Memory.created_at.desc()).limit(limit)
         return (await self.session.scalars(stmt)).all()

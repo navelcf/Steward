@@ -4,6 +4,7 @@ from uuid import uuid4
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from sqlalchemy.exc import IntegrityError
+
 # 它是 SQLAlchemy 的一个异常类，专门表示 “数据库的完整性约束被违反了”
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 

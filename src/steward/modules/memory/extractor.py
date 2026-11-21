@@ -10,7 +10,7 @@ logger = get_logger(__name__)
 
 # 抽取规则常量。绝对不能对它做 .format()：
 # 下面 JSON 示例里的 {"should_save" 会被当成占位符，直接 KeyError。
-EXTRACT_RULES = """你是记忆抽取器。读下面这轮对话，判断有没有值得【跨会话】记住的内容。
+EXTRACT_RULES = """你是记忆抽取器。读下面这轮对话，判断有没有值得【跨会话】记住的内容。大多数情况都无需抽取记忆。
 
 只记四类：任务结论(task_result)、关键决定(decision)、用户明确偏好(preference)、稳定事实(fact)。
 不记：寒暄、客套、文档原文摘抄、一次性细节、敏感信息、助手自己的推理过程。

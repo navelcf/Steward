@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from steward.modules.knowledge.models import Document, ParentChunk
@@ -84,3 +84,12 @@ class KnowledgeRepository:
             )
         )
         return await self.session.scalar(stmt) or 0
+
+    # 重建索引前先清旧父块；子块在 Milvus，由 service 那边删。
+    async def delete_parents(self, doc_id: str, user_id: int) -> int:
+        stmt = delete(ParentChunk).where(
+            ParentChunk.doc_id == doc_id,
+            ParentChunk.user_id == user_id,
+        )
+        result = await self.session.execute(stmt)
+        return result.rowcount or 0

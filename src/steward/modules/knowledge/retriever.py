@@ -7,6 +7,7 @@ from steward.core.logging import get_logger
 from steward.infra.embedding import embed_texts
 from steward.modules.knowledge.repository import KnowledgeRepository
 from steward.modules.knowledge.vector import hybrid_search
+from steward.core.config import settings
 
 logger = get_logger(__name__)
 
@@ -23,6 +24,22 @@ async def retrieve_sources(
 ) -> list[dict[str, str]]:
     vector = embed_texts([query])[0]
     hits = hybrid_search(milvus, query, vector, user_id, top_k, doc_ids)
+
+
+    dense_echo = milvus.search(
+        collection_name=settings.milvus.collection,
+        data=[vector],
+        anns_field="dense",
+        search_params={"metric_type": "COSINE", "params": {"radius": settings.rag.min_score}},
+        limit=1,
+        filter=f"user_id == {user_id}",
+        output_fields=["child_id"],
+    )
+    if not dense_echo[0]:
+        logger.info("检索判为无答案", query_len=len(query))
+        return []
+
+
     if not hits:
         return []
 
